@@ -61,12 +61,22 @@ def _split_sql(sql: str) -> list[str]:
         elif char in {"'", '"'}:
             in_quote = char
         elif char == ";":
-            statement = "".join(current).strip().rstrip(";").strip()
-            if statement and not statement.startswith("--"):
+            statement = _clean_statement("".join(current).strip().rstrip(";").strip())
+            if statement:
                 statements.append(statement)
             current = []
 
-    tail = "".join(current).strip()
+    tail = _clean_statement("".join(current).strip())
     if tail:
         statements.append(tail)
     return statements
+
+
+def _clean_statement(statement: str) -> str:
+    lines = []
+    for line in statement.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("--"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
