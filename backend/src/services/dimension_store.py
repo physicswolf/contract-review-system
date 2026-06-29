@@ -8,19 +8,21 @@ from src.services.db_base import db_pool
 
 
 class DimensionRepository:
-    def find_all(self) -> list[dict[str, Any]]:
+    def find_all(self, enabled: int | None = None) -> list[dict[str, Any]]:
         try:
             conn = db_pool.get_connection()
             try:
                 with conn.cursor() as cursor:
                     cursor.execute(
                         """
-                        SELECT id, name, `desc`, sort_order, status, created_at, updated_at
+                        SELECT id, name, description, sort_order, enabled, created_at, updated_at
                           FROM dimension
+                         WHERE (%(enabled)s IS NULL OR enabled = %(enabled)s)
                          ORDER BY sort_order ASC, id ASC
-                        """
+                        """,
+                        {"enabled": _enabled_param(enabled)},
                     )
-                    return [dict(row) for row in cursor.fetchall()]
+                    return [_with_aliases(dict(row)) for row in cursor.fetchall()]
             finally:
                 conn.close()
         except pymysql.err.DatabaseError as exc:
@@ -45,7 +47,11 @@ class DimensionRepository:
             try:
                 with conn.cursor() as cursor:
                     cursor.execute(
-                        "SELECT * FROM dimension WHERE id = %(id)s",
+                        """
+                        SELECT id, name, description, sort_order, enabled, created_at, updated_at
+                          FROM dimension
+                         WHERE id = %(id)s
+                        """,
                         {"id": dimension_id},
                     )
                     row = cursor.fetchone()
@@ -53,7 +59,7 @@ class DimensionRepository:
                 conn.close()
         except pymysql.err.DatabaseError as exc:
             raise RuntimeError(f"MySQL 维度读取失败: {exc}") from exc
-        return dict(row) if row is not None else None
+        return _with_aliases(dict(row)) if row is not None else None
 
     def find_by_name(self, name: str) -> dict[str, Any] | None:
         try:
@@ -61,7 +67,11 @@ class DimensionRepository:
             try:
                 with conn.cursor() as cursor:
                     cursor.execute(
-                        "SELECT * FROM dimension WHERE name = %(name)s",
+                        """
+                        SELECT id, name, description, sort_order, enabled, created_at, updated_at
+                          FROM dimension
+                         WHERE name = %(name)s
+                        """,
                         {"name": name},
                     )
                     row = cursor.fetchone()
@@ -69,7 +79,7 @@ class DimensionRepository:
                 conn.close()
         except pymysql.err.DatabaseError as exc:
             raise RuntimeError(f"MySQL 维度读取失败: {exc}") from exc
-        return dict(row) if row is not None else None
+        return _with_aliases(dict(row)) if row is not None else None
 
     def find_names(self) -> list[str]:
         try:
@@ -80,7 +90,7 @@ class DimensionRepository:
                         """
                         SELECT name
                           FROM dimension
-                         WHERE status = '已启用'
+                         WHERE enabled = 1
                          ORDER BY sort_order ASC, id ASC
                         """
                     )
@@ -97,13 +107,13 @@ class DimensionRepository:
                 with conn.cursor() as cursor:
                     cursor.execute(
                         """
-                        SELECT name, `desc`
+                        SELECT name, description
                           FROM dimension
-                         WHERE status = '已启用'
+                         WHERE enabled = 1
                          ORDER BY sort_order ASC, id ASC
                         """
                     )
-                    return [dict(row) for row in cursor.fetchall()]
+                    return [_with_aliases(dict(row)) for row in cursor.fetchall()]
             finally:
                 conn.close()
         except pymysql.err.DatabaseError as exc:
@@ -116,8 +126,8 @@ class DimensionRepository:
                 with conn.cursor() as cursor:
                     cursor.execute(
                         """
-                        INSERT INTO dimension (name, `desc`, sort_order, status)
-                        VALUES (%(name)s, %(desc)s, %(sort_order)s, %(status)s)
+                        INSERT INTO dimension (name, description, sort_order, enabled)
+                        VALUES (%(name)s, %(description)s, %(sort_order)s, %(enabled)s)
                         """,
                         _payload(payload),
                     )
@@ -132,15 +142,11 @@ class DimensionRepository:
             raise RuntimeError(f"MySQL 维度创建失败: {exc}") from exc
 
     def update_by_id(self, dimension_id: int, updates: dict[str, Any]) -> dict[str, Any] | None:
-        allowed = {"name", "desc", "sort_order", "status"}
-        payload = {key: value for key, value in updates.items() if key in allowed}
+        payload = _payload(updates, partial=True)
         if not payload:
             return self.find_by_id(dimension_id)
 
-        assignments = ", ".join(
-            f"`{key}` = %({key})s" if key == "desc" else f"{key} = %({key})s"
-            for key in payload
-        )
+        assignments = ", ".join(f"{key} = %({key})s" for key in payload)
         payload["id"] = dimension_id
         try:
             conn = db_pool.get_connection()
@@ -174,12 +180,10 @@ class DimensionRepository:
                         """,
                         {"id": dimension_id},
                     )
-                    if int(cursor.fetchone()["total"]) > 0:
-                        raise ValueError("该维度下仍有关联审查点，不能删除")
-                    cursor.execute(
-                        "DELETE FROM dimension WHERE id = %(id)s",
-                        {"id": dimension_id},
-                    )
+                    total = int(cursor.fetchone()["total"])
+                    if total > 0:
+                        raise ValueError(f"该维度下存在 {total} 个审查点，请先删除或迁移后再操作")
+                    cursor.execute("DELETE FROM dimension WHERE id = %(id)s", {"id": dimension_id})
                     deleted = cursor.rowcount > 0
                 conn.commit()
                 return deleted
@@ -191,13 +195,47 @@ class DimensionRepository:
             raise RuntimeError(f"MySQL 维度删除失败: {exc}") from exc
 
 
-def _payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": str(payload.get("name") or "").strip(),
-        "desc": str(payload.get("desc") or ""),
-        "sort_order": int(payload.get("sort_order") or 0),
-        "status": str(payload.get("status") or "已启用"),
-    }
+def _payload(payload: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if "name" in payload:
+        result["name"] = str(payload.get("name") or "").strip()
+    elif not partial:
+        result["name"] = ""
+
+    if "description" in payload or "desc" in payload:
+        result["description"] = str(payload.get("description") or payload.get("desc") or "")
+    elif not partial:
+        result["description"] = ""
+
+    if "sortOrder" in payload or "sort_order" in payload:
+        result["sort_order"] = int(payload.get("sortOrder") or payload.get("sort_order") or 0)
+    elif not partial:
+        result["sort_order"] = 0
+
+    if "enabled" in payload:
+        result["enabled"] = _enabled_value(payload.get("enabled"))
+    elif "status" in payload:
+        result["enabled"] = 1 if payload.get("status") == "已启用" else 0
+    elif not partial:
+        result["enabled"] = 1
+
+    return result
+
+
+def _enabled_param(value: Any) -> int | None:
+    return None if value in (None, "") else _enabled_value(value)
+
+
+def _enabled_value(value: Any) -> int:
+    return 1 if int(value or 0) else 0
+
+
+def _with_aliases(record: dict[str, Any]) -> dict[str, Any]:
+    enabled = _enabled_value(record.get("enabled", 1))
+    record["enabled"] = enabled
+    record["desc"] = record.get("description") or ""
+    record["status"] = "已启用" if enabled else "已停用"
+    return record
 
 
 dimension_repository = DimensionRepository()
