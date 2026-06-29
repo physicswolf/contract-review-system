@@ -2,13 +2,14 @@
   <div class="app-shell">
     <AppSidebar />
     <div class="app-body">
-      <router-view />
+      <RouterView />
     </div>
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
+import { RouterView } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import { userStore } from '../stores/user'
 import { getProfile } from '../services/auth.service'
