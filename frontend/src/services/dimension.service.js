@@ -1,12 +1,26 @@
 import http from '../api/http'
 import { USE_MOCK } from './config'
 import { delay, nextId } from '../api/mock/delay'
-import { dimensionDetail, selectableDimensions } from '../api/mock/db'
+import { dimensionDetail } from '../api/mock/db'
+
+function adapt(d) {
+  return {
+    id: d.id,
+    name: d.name,
+    desc: d.description,
+    description: d.description,
+    sortOrder: d.sortOrder ?? d.sort_order ?? 0,
+    enabled: d.enabled,
+    status: d.enabled ? '已启用' : '已停用',
+    updatedAt: d.updatedAt ? d.updatedAt.slice(0, 10) : '',
+  }
+}
 
 export async function listDimensionDetail() {
   if (USE_MOCK) return delay({ items: dimensionDetail, total: dimensionDetail.length })
   const { data } = await http.get('/dimensions')
-  return data
+  const items = (data.data || []).map(adapt)
+  return { items, total: items.length }
 }
 
 export async function saveDimension(payload) {
@@ -20,9 +34,22 @@ export async function saveDimension(payload) {
     dimensionDetail.unshift(row)
     return delay(row)
   }
+  // 启停
+  if (payload.id && Object.keys(payload).join(',') === 'id,status') {
+    const { data } = await http.put(`/dimensions/${payload.id}`, {
+      enabled: payload.status === '已启用' ? 1 : 0,
+    })
+    return data
+  }
+  const body = {
+    name: payload.name,
+    description: payload.desc || payload.description,
+    sortOrder: payload.sortOrder,
+    enabled: payload.enabled ?? (payload.status === '已停用' ? 0 : 1),
+  }
   const { data } = await http[payload.id ? 'put' : 'post'](
     payload.id ? `/dimensions/${payload.id}` : '/dimensions',
-    payload,
+    body,
   )
   return data
 }
@@ -38,13 +65,7 @@ export async function deleteDimension(id) {
 }
 
 export async function listSelectableDimensions() {
-  if (USE_MOCK) return delay(selectableDimensions)
-  const { data } = await http.get('/dimensions/selectable')
-  return data
-}
-
-export async function saveRelations(payload) {
-  if (USE_MOCK) return delay({ ok: true })
-  const { data } = await http.post('/dimensions/relations', payload)
-  return data
+  if (USE_MOCK) return delay(dimensionDetail.filter((d) => d.status === '已启用'))
+  const { data } = await http.get('/dimensions', { params: { enabled: 1 } })
+  return (data.data || []).map(adapt)
 }

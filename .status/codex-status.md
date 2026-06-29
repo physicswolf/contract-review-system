@@ -210,3 +210,53 @@
 - **现象**：当前项目目录下 `.status/codex-status.md` 和 `.status/` 目录不存在
 - **动作**：根据本次对话记录重建 `.status/` 目录，并将完整运行状态重新写入 `.status/codex-status.md`
 - **结果**：状态文件已恢复，覆盖本轮对话中的主要开发、验证、联调排查和部署修复记录
+
+---
+
+## 2026-06-29 23:39:48 CST — tmp 前端差异融合与后端适配
+
+- **依据**：读取新增 `docs/planning/tmp前端差异融合与后端适配计划书.md`、`docs/develop/tmp前端差异融合与后端适配设计说明书.md`、`docs/develop/tmp后端与本地配置服务代码对比.md`
+- **动作**：按文档以 tmp 前端为准融合配置中心相关差异，保留本项目结构编辑流程、`document.service.js`、`StructureEditor.vue`、`VITE_USE_MOCK`、`VITE_API_BASE`、`VITE_ENABLE_STRUCTURE_EDITOR`
+- **前端结果**：配置中心审查点、维度、合同类型 service 与页面已对齐 tmp 字段适配；上传审核流程仍保留结构编辑开关和 resume 流程
+- **后端动作**：新增 `/api/audit-points` tmp 兼容路由；扩展 `/api/dimensions` 支持 `enabled` 查询和 tmp 字段；扩展 `/api/contract-types` 支持 tmp 字段、`linkedAuditPoints`、`PUT /{id}/audit-points`、`PATCH /{id}/audit-points/{point_id}/enabled`
+- **后端结果**：Repository 层完成 `description`/`desc`、`enabled`/中文 `status`、`dimId`/`dim_id`、审查点 JSON 字段、合同类型关联字段的双向映射
+- **验证**：
+  - `python3 -m compileall backend/src` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from src.main import app; ..."` 通过，路由包含 `/api/audit-points` 和合同类型关联端点
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 未收集到测试用例，pytest 以 code 5 退出；未发现业务断言失败
+  - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+- **后续事项**：联调时确认前端 `VITE_USE_MOCK=false`，前后端结构编辑开关按需开启；配置中心接口现在按 tmp 文档返回 `{code,msg,data}` 成功响应
+
+---
+
+## 2026-06-30 00:57:16 CST — 评审整改与后端配置服务 tmp schema 对齐
+
+- **依据**：读取 `docs/review/2026-06-29-开发审查报告.md`、`docs/planning/后端配置服务对齐tmp规范改造计划书.md`、`docs/develop/后端配置服务对齐tmp规范改造设计说明书.md`
+- **评审整改**：从 `/home/wolfsoft/my_code/contract/homepage/backend/tests/` 恢复后端测试文件并适配当前 `src.*` 包名、`/api` 路径和当前响应格式；删除未注册的空路由 `backend/src/api/audit.py`
+- **后端改造**：新增 `008_rebuild_config_tables.sql`、`009_seed_tmp_config_data.sql`，配置表按 tmp schema 使用 `description` 与 `enabled`，审查点 JSON 改为 `{name, highStd, lowStd, noneStd}` / `{level, analysis, suggestion}` 格式
+- **迁移保护**：为 `lifecycle.py` 增加 `schema_migrations` 记录表，避免 008 的 DROP/CREATE 在每次后端启动时重复清空配置表；未直接运行真实 `run_migrations()`，避免在当前数据库上立即重建配置数据
+- **API 结果**：配置服务统一使用 tmp 成功/错误格式；新增 `/api/internal/contract-types/match` 与 `/api/internal/contract-types/{id}/audit-points`；新增 LLM 配置项到 `config.py` 与 `.env.example`
+- **审核适配**：`contracts.py` 的降级审核结果生成同步读取 tmp JSON 字段 `analysis/suggestion/highStd/lowStd`
+- **测试结果**：运行 `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`51 passed`
+- **构建结果**：运行 `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+- **其他验证**：`python3 -m compileall backend/src` 通过；`git diff --check` 通过；SQL 拆分检查确认 008/009 可被迁移拆分器解析
+- **约束说明**：设计文档要求更新 `frontend/src/api/mock/db.js`，但项目 `AGENTS.md` 明确禁止修改该文件，本轮未修改
+- **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+
+---
+
+## 2026-06-30 01:11:41 CST — 配置服务 tmp 改造审查意见修复
+
+- **依据**：读取最新 `docs/review/2026-06-30-配置服务tmp改造审查报告.md`
+- **已确认**：`tests/` 已恢复并通过回归；空路由 `backend/src/api/audit.py` 已删除；前端源码未调用 `/api/points`，旧端点暂保留作为兼容接口
+- **动作**：将 `backend/src/db/migrations/009_seed_tmp_config_data.sql` 中 4 组种子写入全部改为 `INSERT IGNORE`，避免单独重跑 009 时因主键或唯一约束冲突失败
+- **约束处理**：审查意见建议标注设计说明书 mock 数据更新已撤销，但 `AGENTS.md` 禁止修改 `docs/planning/` 与 `docs/develop/` 现有文档，本轮未修改设计说明书正文
+- **验证**：
+  - SQL 拆分检查确认 009 仍为 4 条语句，且全部为 `INSERT IGNORE`
+  - `python3 -m compileall backend/src` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`51 passed`
+  - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
