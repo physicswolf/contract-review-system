@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { API_BASE } from '../services/config'
-import { getStoredItem, removeStoredItem } from '../utils/browser'
 
 const http = axios.create({
   baseURL: API_BASE,
@@ -10,7 +9,7 @@ const http = axios.create({
 
 // 请求拦截：注入 token
 http.interceptors.request.use((cfg) => {
-  const token = getStoredItem('token')
+  const token = localStorage.getItem('token')
   if (token) cfg.headers.Authorization = `Bearer ${token}`
   return cfg
 })
@@ -22,7 +21,7 @@ http.interceptors.response.use(
     const status = error?.response?.status
     const msg = error?.response?.data?.msg || error?.response?.data?.detail || error?.message || '请求失败'
     if (status === 401) {
-      removeStoredItem('token')
+      localStorage.removeItem('token')
       if (location.pathname !== '/login') location.href = '/login'
     } else {
       ElMessage.error(msg)

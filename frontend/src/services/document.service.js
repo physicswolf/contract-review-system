@@ -1,7 +1,6 @@
 import http from '../api/http'
 import { USE_MOCK } from './config'
 import { delay } from '../api/mock/delay'
-import { cloneData } from '../utils/browser'
 
 const mockStructure = {
   node_id: 'root',
@@ -45,7 +44,7 @@ export async function getDocumentStructure(fileId) {
   if (USE_MOCK) {
     return delay({
       meta: { schema_name: 'MockContractDocument', file_id: fileId },
-      structure: cloneData(mockStructure),
+      structure: structuredClone(mockStructure),
     })
   }
   const { data } = await http.get(`/documents/${fileId}/structure`)

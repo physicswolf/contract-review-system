@@ -1,15 +1,14 @@
 import { reactive } from 'vue'
-import { getStoredItem, removeStoredItem, setStoredItem } from '../utils/browser'
 
 // 轻量全局用户状态（不引入 Pinia）
 export const userStore = reactive({
-  token: getStoredItem('token'),
+  token: localStorage.getItem('token') || '',
   profile: null,
 
   setLogin(token, profile) {
     this.token = token
     this.profile = profile
-    setStoredItem('token', token)
+    localStorage.setItem('token', token)
   },
   setProfile(profile) {
     this.profile = profile
@@ -17,7 +16,7 @@ export const userStore = reactive({
   logout() {
     this.token = ''
     this.profile = null
-    removeStoredItem('token')
+    localStorage.removeItem('token')
   },
   get isLoggedIn() {
     return !!this.token
