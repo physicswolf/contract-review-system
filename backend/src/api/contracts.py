@@ -280,17 +280,21 @@ def _build_audit_items(
                 "title": str(point.get("name") or "合同风险"),
                 "risk_level": 1 if level == "major" else 2,
                 "risk_summary": str(
-                    default_result.get("overview")
+                    default_result.get("analysis")
+                    or default_result.get("overview")
+                    or point.get("description")
                     or point.get("desc")
                     or "该条款存在潜在风险。"
                 ),
                 "risk_analysis": str(
                     _risk_point_analysis(risk_points, level)
+                    or default_result.get("analysis")
                     or default_result.get("overview")
                     or "建议结合业务背景进一步核查。"
                 ),
                 "modify_example": str(
-                    default_result.get("solution")
+                    default_result.get("suggestion")
+                    or default_result.get("solution")
                     or "建议补充明确约定，降低履约和争议风险。"
                 ),
                 "clause_name": str(
@@ -402,6 +406,7 @@ def _pick_hit_text(blocks: list[dict[str, str]], point: dict[str, Any]) -> str:
     candidates = [
         str(point.get("name") or ""),
         str(point.get("category") or ""),
+        str(point.get("description") or ""),
         str(point.get("desc") or ""),
     ]
     for block in blocks:
@@ -429,7 +434,7 @@ def _frontend_level(default_result: dict[str, Any]) -> str:
     value = str(default_result.get("level") or default_result.get("riskLevel") or "")
     if value in {"高风险", "重大风险", "major", "red"}:
         return "major"
-    overview = str(default_result.get("overview") or "")
+    overview = str(default_result.get("analysis") or default_result.get("overview") or "")
     if any(kw in overview for kw in ["高风险", "重大风险", "严重", "可能无效"]):
         return "major"
     return "general"
@@ -438,10 +443,13 @@ def _frontend_level(default_result: dict[str, Any]) -> str:
 def _risk_point_analysis(risk_points: Any, level: str) -> str:
     if not isinstance(risk_points, list):
         return ""
-    preferred = "high" if level == "major" else "low"
+    preferred = "highStd" if level == "major" else "lowStd"
+    fallback = "high" if level == "major" else "low"
     for item in risk_points:
         if isinstance(item, dict) and item.get(preferred):
             return str(item[preferred])
+        if isinstance(item, dict) and item.get(fallback):
+            return str(item[fallback])
     return ""
 
 

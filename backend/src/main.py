@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from src.api.audit_points import router as audit_points_router
 from src.api.auth import router as auth_router
 from src.api.contracts import router as contracts_router
 from src.api.contract_types import router as contract_types_router
@@ -9,6 +10,7 @@ from src.api.dimensions import router as dimensions_router
 from src.api.documents import router as documents_router
 from src.api.files import router as files_router
 from src.api.health import router as health_router
+from src.api.internal import router as internal_router
 from src.api.points import router as points_router
 from src.api.review import router as review_router
 from src.config import get_settings
@@ -45,12 +47,18 @@ def create_app() -> FastAPI:
         tags=["审核配置"],
     )
     app.include_router(points_router, prefix=f"{settings.api_prefix}/points", tags=["审查点"])
+    app.include_router(
+        audit_points_router,
+        prefix=f"{settings.api_prefix}/audit-points",
+        tags=["审查点(tmp兼容)"],
+    )
     app.include_router(dimensions_router, prefix=f"{settings.api_prefix}/dimensions", tags=["审查维度"])
     app.include_router(
         contract_types_router,
         prefix=f"{settings.api_prefix}/contract-types",
         tags=["合同类型"],
     )
+    app.include_router(internal_router, prefix=f"{settings.api_prefix}/internal", tags=["内部接口"])
     return app
 
 

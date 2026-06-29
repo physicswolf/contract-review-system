@@ -29,7 +29,10 @@ def run_migrations() -> None:
 
     conn = db_pool.get_connection()
     try:
+        _ensure_migration_table(conn)
         for sql_file in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            if _migration_applied(conn, sql_file.name):
+                continue
             sql = sql_file.read_text(encoding="utf-8")
             with conn.cursor() as cursor:
                 for statement in _split_sql(sql):
@@ -38,9 +41,36 @@ def run_migrations() -> None:
                     except pymysql.err.OperationalError as exc:
                         if exc.args[0] not in (1050, 1060, 1061):
                             raise
+                cursor.execute(
+                    "INSERT INTO schema_migrations (filename) VALUES (%(filename)s)",
+                    {"filename": sql_file.name},
+                )
             conn.commit()
     finally:
         conn.close()
+
+
+def _ensure_migration_table(conn: pymysql.connections.Connection) -> None:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                filename VARCHAR(255) NOT NULL,
+                applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (filename)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """
+        )
+    conn.commit()
+
+
+def _migration_applied(conn: pymysql.connections.Connection, filename: str) -> bool:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT filename FROM schema_migrations WHERE filename = %(filename)s",
+            {"filename": filename},
+        )
+        return cursor.fetchone() is not None
 
 
 def _split_sql(sql: str) -> list[str]:

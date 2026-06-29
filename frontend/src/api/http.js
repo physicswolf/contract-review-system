@@ -19,7 +19,7 @@ http.interceptors.response.use(
   (resp) => resp,
   (error) => {
     const status = error?.response?.status
-    const msg = error?.response?.data?.detail || error?.message || '请求失败'
+    const msg = error?.response?.data?.msg || error?.response?.data?.detail || error?.message || '请求失败'
     if (status === 401) {
       localStorage.removeItem('token')
       if (location.pathname !== '/login') location.href = '/login'

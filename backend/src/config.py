@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480
     enable_structure_editor: bool = False
+    llm_api_url: str = "http://localhost:11434/v1/chat/completions"
+    llm_api_key: str = "ollama"
+    llm_model_name: str = "qwen3:32b"
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

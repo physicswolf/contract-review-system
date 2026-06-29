@@ -19,7 +19,11 @@ AUTH_WHITELIST = {
 def register_middlewares(app: FastAPI) -> None:
     @app.middleware("http")
     async def jwt_auth_middleware(request: Request, call_next):
-        if request.method == "OPTIONS" or request.url.path in AUTH_WHITELIST:
+        if (
+            request.method == "OPTIONS"
+            or request.url.path in AUTH_WHITELIST
+            or request.url.path.startswith("/api/internal/")
+        ):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
