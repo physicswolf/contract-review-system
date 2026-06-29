@@ -20,8 +20,8 @@
         </div>
         <div class="field">
           <label>审核维度</label>
-          <el-select v-model="form.dimension" class="full" placeholder="请选择维度">
-            <el-option v-for="d in dims" :key="d" :label="d" :value="d" />
+          <el-select v-model="form.dimId" class="full" placeholder="请选择维度" @change="onDimChange">
+            <el-option v-for="d in dims" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </div>
         <div class="field">
@@ -51,9 +51,9 @@
           <el-button size="small" type="danger" plain @click="form.risks.splice(i, 1)">删除</el-button>
         </div>
         <div class="field"><label>风险点名称</label><el-input v-model="r.title" /></div>
-        <div class="field"><label>条文说明</label><el-input v-model="r.clauseNote" /></div>
-        <div class="field"><label>低风险说明</label><el-input v-model="r.low" /></div>
-        <div class="field"><label>高风险说明</label><el-input v-model="r.high" /></div>
+        <div class="field"><label>高风险说明</label><el-input v-model="r.high" type="textarea" :rows="3" /></div>
+        <div class="field"><label>低风险说明</label><el-input v-model="r.low" type="textarea" :rows="3" /></div>
+        <div class="field"><label>无风险说明</label><el-input v-model="r.noneStd" type="textarea" :rows="3" /></div>
       </div>
     </section>
 
@@ -65,10 +65,26 @@
           <p>未单独配置结果时，系统默认返回以下审查结论</p>
         </div>
       </div>
-      <div class="field"><label>合同原文</label><el-input v-model="form.def.clause" type="textarea" :rows="2" /></div>
-      <div class="field"><label>风险模型</label><el-input v-model="form.def.model" type="textarea" :rows="2" /></div>
-      <div class="field"><label>风险说明</label><el-input v-model="form.def.overview" type="textarea" :rows="2" /></div>
-      <div class="field"><label>修改建议</label><el-input v-model="form.def.solution" type="textarea" :rows="2" /></div>
+      <div class="field">
+        <label>风险等级</label>
+        <el-select v-model="form.def.level" class="full">
+          <el-option label="高风险" value="高风险" />
+          <el-option label="低风险" value="低风险" />
+          <el-option label="无风险" value="无风险" />
+        </el-select>
+      </div>
+      <template v-if="form.def.level !== '无风险'">
+        <div class="field">
+          <label>风险点</label>
+          <el-select v-model="form.def.riskPointName" class="full" clearable placeholder="选择关联风险点">
+            <el-option v-for="r in form.risks" :key="r.title" :label="r.title" :value="r.title" />
+          </el-select>
+        </div>
+      </template>
+      <div class="field"><label>风险分析</label><el-input v-model="form.def.overview" type="textarea" :rows="2" /></div>
+      <div v-if="form.def.level !== '无风险'" class="field">
+        <label>修改建议</label><el-input v-model="form.def.solution" type="textarea" :rows="2" />
+      </div>
     </section>
 
     <!-- 审查示例 -->
@@ -83,9 +99,26 @@
           <el-button size="small" type="danger" plain @click="form.examples.splice(i, 1)">删除</el-button>
         </div>
         <div class="field"><label>合同原文</label><el-input v-model="ex.clause" type="textarea" :rows="2" /></div>
-        <div class="field"><label>风险模型</label><el-input v-model="ex.model" type="textarea" :rows="2" /></div>
-        <div class="field"><label>风险说明</label><el-input v-model="ex.overview" type="textarea" :rows="2" /></div>
-        <div class="field"><label>修改建议</label><el-input v-model="ex.solution" type="textarea" :rows="2" /></div>
+        <div class="field">
+          <label>风险等级</label>
+          <el-select v-model="ex.level" class="full">
+            <el-option label="高风险" value="高风险" />
+            <el-option label="低风险" value="低风险" />
+            <el-option label="无风险" value="无风险" />
+          </el-select>
+        </div>
+        <template v-if="ex.level !== '无风险'">
+          <div class="field">
+            <label>风险点</label>
+            <el-select v-model="ex.riskPointName" class="full" clearable placeholder="选择关联风险点">
+              <el-option v-for="r in form.risks" :key="r.title" :label="r.title" :value="r.title" />
+            </el-select>
+          </div>
+        </template>
+        <div class="field"><label>风险分析</label><el-input v-model="ex.overview" type="textarea" :rows="2" /></div>
+        <div v-if="ex.level !== '无风险'" class="field">
+          <label>修改建议</label><el-input v-model="ex.solution" type="textarea" :rows="2" />
+        </div>
       </div>
     </section>
 
@@ -114,15 +147,21 @@ const form = reactive({
   id: '',
   name: '',
   dimension: '',
+  dimId: null,
   note: '',
   desc: '',
-  risks: [{ title: '', clauseNote: '', low: '', high: '' }],
-  def: { clause: '', model: '', overview: '', solution: '' },
-  examples: [{ clause: '', model: '', overview: '', solution: '' }],
+  risks: [{ title: '', high: '', low: '', noneStd: '' }],
+  def: { level: '高风险', riskPointName: '', overview: '', solution: '' },
+  examples: [{ clause: '', level: '高风险', riskPointName: '', overview: '', solution: '' }],
 })
 
 const cnNums = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 const cn = (n) => cnNums[n - 1] || n
+
+function onDimChange(id) {
+  const d = dims.value.find((x) => x.id === id)
+  form.dimension = d ? d.name : ''
+}
 
 onMounted(async () => {
   dims.value = await listDimensions()
@@ -130,7 +169,41 @@ onMounted(async () => {
     loading.value = true
     try {
       const p = await getPoint(route.params.id)
-      if (p) Object.assign(form, { id: p.id, name: p.name, dimension: p.dimension, desc: p.desc })
+      if (p) {
+        Object.assign(form, {
+          id: p.id,
+          name: p.name,
+          dimId: p.dimId,
+          dimension: p.dimension,
+          desc: p.desc,
+          note: p.instruction,
+        })
+        if (Array.isArray(p.risks) && p.risks.length) {
+          form.risks = p.risks.map((r) => ({
+            title: r.name || r.title || '',
+            high: r.highStd || r.high || '',
+            low: r.lowStd || r.low || '',
+            noneStd: r.noneStd || '',
+          }))
+        }
+        if (p.defaultResult) {
+          form.def = {
+            level: p.defaultResult.level || '高风险',
+            riskPointName: p.defaultResult.riskPointName || '',
+            overview: p.defaultResult.analysis || p.defaultResult.overview || '',
+            solution: p.defaultResult.suggestion || p.defaultResult.solution || '',
+          }
+        }
+        if (Array.isArray(p.examples) && p.examples.length) {
+          form.examples = p.examples.map((ex) => ({
+            clause: ex.original || ex.clause || '',
+            level: ex.level || '高风险',
+            riskPointName: ex.riskPointName || '',
+            overview: ex.analysis || ex.overview || '',
+            solution: ex.suggestion || ex.solution || '',
+          }))
+        }
+      }
     } finally {
       loading.value = false
     }
@@ -138,11 +211,12 @@ onMounted(async () => {
 })
 
 function addRisk() {
-  form.risks.push({ title: '', clauseNote: '', low: '', high: '' })
+  form.risks.push({ title: '', high: '', low: '', noneStd: '' })
 }
 function addExample() {
-  form.examples.push({ clause: '', model: '', overview: '', solution: '' })
+  form.examples.push({ clause: '', level: '高风险', overview: '', solution: '' })
 }
+
 async function save() {
   if (!form.name) {
     ElMessage.warning('请填写审核点名称')
@@ -153,8 +227,29 @@ async function save() {
     await savePoint({
       id: isNew.value ? undefined : form.id,
       name: form.name,
+      dimId: form.dimId,
       dimension: form.dimension,
       desc: form.desc,
+      instruction: form.note,
+      risks: form.risks.map((r) => ({
+        name: r.title,
+        highStd: r.high,
+        lowStd: r.low,
+        noneStd: r.noneStd,
+      })),
+      defaultResult: {
+        level: form.def.level,
+        riskPointName: form.def.level !== '无风险' ? form.def.riskPointName : '',
+        analysis: form.def.overview,
+        suggestion: form.def.level !== '无风险' ? form.def.solution : '',
+      },
+      examples: form.examples.map((ex) => ({
+        original: ex.clause,
+        level: ex.level,
+        riskPointName: ex.level !== '无风险' ? ex.riskPointName : '',
+        analysis: ex.overview,
+        suggestion: ex.level !== '无风险' ? ex.solution : '',
+      })),
     })
     ElMessage.success('保存成功')
     router.push({ name: 'config' })

@@ -9,7 +9,7 @@ export async function login({ account, password }) {
     return { token: 'mock-token-' + Date.now(), user: { ...profile, account } }
   }
   const { data } = await http.post('/auth/login', { account, password })
-  return data
+  return data.data
 }
 
 export async function getProfile() {
