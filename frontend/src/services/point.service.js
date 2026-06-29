@@ -49,6 +49,6 @@ export async function deletePoint(id) {
 
 export async function listDimensions() {
   if (USE_MOCK) return delay(dimensions)
-  const { data } = await http.get('/dimensions')
+  const { data } = await http.get('/dimensions/names')
   return data
 }

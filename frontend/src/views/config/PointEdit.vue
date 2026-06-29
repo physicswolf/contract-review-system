@@ -130,7 +130,25 @@ onMounted(async () => {
     loading.value = true
     try {
       const p = await getPoint(route.params.id)
-      if (p) Object.assign(form, { id: p.id, name: p.name, dimension: p.dimension, desc: p.desc })
+      if (p) {
+        form.id = p.id
+        form.name = p.name || ''
+        form.dimension = p.dimension || ''
+        form.note = p.note || ''
+        form.desc = p.desc || ''
+        if (p.risks && p.risks.length) {
+          form.risks = p.risks
+        }
+        if (p.def) {
+          form.def.clause = p.def.clause || ''
+          form.def.model = p.def.model || ''
+          form.def.overview = p.def.overview || ''
+          form.def.solution = p.def.solution || ''
+        }
+        if (p.examples && p.examples.length) {
+          form.examples = p.examples
+        }
+      }
     } finally {
       loading.value = false
     }
@@ -154,7 +172,11 @@ async function save() {
       id: isNew.value ? undefined : form.id,
       name: form.name,
       dimension: form.dimension,
+      note: form.note,
       desc: form.desc,
+      risks: form.risks.filter((r) => r.title),
+      def: form.def,
+      examples: form.examples.filter((e) => e.clause || e.overview || e.solution),
     })
     ElMessage.success('保存成功')
     router.push({ name: 'config' })

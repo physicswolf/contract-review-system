@@ -1,8 +1,12 @@
 # 依赖
 node_modules/
+.venv/
 
 # 构建产物
 dist/
+__pycache__/
+.pytest_cache/
+*.py[cod]
 
 # 本地环境变量
 .env
@@ -24,3 +28,12 @@ pnpm-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
+
+# gitignore
+docs/.gitignore
+
+# vibe
+.agents/
+.codex/
+.status/
+AGENTS.md

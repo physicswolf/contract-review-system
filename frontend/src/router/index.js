@@ -12,6 +12,7 @@ const routes = [
     children: [
       { path: '', redirect: { name: 'review' } },
       { path: 'review', name: 'review', component: () => import('../views/review/ReviewWizard.vue') },
+      { path: 'editor/:fileId', name: 'structureEditor', component: () => import('../views/contract/StructureEditor.vue') },
       { path: 'contracts', name: 'contracts', component: () => import('../views/contract/ContractList.vue') },
       { path: 'contracts/:id/result', name: 'result', component: () => import('../views/contract/AuditResult.vue') },
 

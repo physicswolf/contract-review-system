@@ -3,6 +3,7 @@ import { reactive } from 'vue'
 // 审核向导跨步骤数据
 export const reviewStore = reactive({
   contractId: '',
+  fileId: '',
   fileName: '',
   detectedType: '',
   matchConfidence: 0,
@@ -11,6 +12,7 @@ export const reviewStore = reactive({
 
   reset() {
     this.contractId = ''
+    this.fileId = ''
     this.fileName = ''
     this.detectedType = ''
     this.matchConfidence = 0

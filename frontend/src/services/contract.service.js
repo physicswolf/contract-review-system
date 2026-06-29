@@ -1,5 +1,5 @@
 import http from '../api/http'
-import { USE_MOCK } from './config'
+import { ENABLE_STRUCTURE_EDITOR, USE_MOCK } from './config'
 import { delay, nextId } from '../api/mock/delay'
 import { contracts, buildAuditResult } from '../api/mock/db'
 
@@ -29,11 +29,15 @@ export async function deleteContract(id) {
 export async function uploadContract(file) {
   if (USE_MOCK) {
     await delay(null, 600)
+    const contractId = nextId('c')
+    const fileId = nextId('f')
     return {
-      id: nextId('c'),
+      id: contractId,
+      fileId,
       name: file?.name || '智慧园区软件采购合同.docx',
       detectedType: '采购合同',
       matchConfidence: 96,
+      enableStructureEditor: ENABLE_STRUCTURE_EDITOR,
     }
   }
   const form = new FormData()

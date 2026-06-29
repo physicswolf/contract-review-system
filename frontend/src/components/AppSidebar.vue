@@ -52,7 +52,7 @@ const groups = [
 
 function isActive(item) {
   if (item.match === 'config') return route.path.startsWith('/config')
-  if (item.name === 'review') return route.name === 'review'
+  if (item.name === 'review') return route.name === 'review' || route.name === 'structureEditor'
   if (item.name === 'contracts') return route.name === 'contracts' || route.name === 'result'
   return route.name === item.name
 }

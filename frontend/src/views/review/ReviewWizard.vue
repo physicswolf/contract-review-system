@@ -22,7 +22,7 @@
       </div>
 
       <StepUpload v-if="step === 1" @uploaded="onUploaded" />
-      <StepSetup v-else-if="step === 2" @back="step = 1" @start="onStart" />
+      <StepSetup v-else-if="step === 2" @back="backToUpload" @start="onStart" />
     </div>
   </div>
 
@@ -31,7 +31,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Check } from '@element-plus/icons-vue'
 import AppTopbar from '../../components/AppTopbar.vue'
 import StepUpload from './StepUpload.vue'
@@ -39,7 +39,9 @@ import StepSetup from './StepSetup.vue'
 import UploadProgressOverlay from '../../components/UploadProgressOverlay.vue'
 import { reviewStore } from '../../stores/review'
 import { uploadContract, startAudit } from '../../services/contract.service'
+import { ENABLE_STRUCTURE_EDITOR } from '../../services/config'
 
+const route = useRoute()
 const router = useRouter()
 const step = ref(1)
 const overlay = ref(null)
@@ -56,14 +58,30 @@ function stepState(no) {
   return ''
 }
 
-reviewStore.reset()
+initializeReviewState()
 
 async function onUploaded(file) {
   const [res] = await Promise.all([uploadContract(file), overlay.value.start()])
-  reviewStore.contractId = res.id
-  reviewStore.fileName = res.name
-  reviewStore.detectedType = res.detectedType
-  reviewStore.matchConfidence = res.matchConfidence
+  reviewStore.contractId = String(res.id || '')
+  reviewStore.fileId = String(res.fileId || '')
+  reviewStore.fileName = String(res.name || file?.name || '')
+  reviewStore.detectedType = String(res.detectedType || '未分类')
+  reviewStore.matchConfidence = Number(res.matchConfidence || 0)
+
+  if (res.enableStructureEditor && ENABLE_STRUCTURE_EDITOR && reviewStore.fileId) {
+    router.push({
+      name: 'structureEditor',
+      params: { fileId: reviewStore.fileId },
+      query: {
+        contractId: reviewStore.contractId,
+        fileId: reviewStore.fileId,
+        fileName: reviewStore.fileName,
+        detectedType: reviewStore.detectedType,
+        matchConfidence: reviewStore.matchConfidence,
+      },
+    })
+    return
+  }
   step.value = 2
 }
 
@@ -74,6 +92,42 @@ async function onStart() {
   })
   step.value = 3
   router.push({ name: 'result', params: { id: reviewStore.contractId } })
+}
+
+function initializeReviewState() {
+  const shouldResume = route.query.resume === '1' && (queryValue('contractId') || reviewStore.contractId)
+  if (!shouldResume) {
+    reviewStore.reset()
+    return
+  }
+
+  restoreReviewContext()
+  step.value = 2
+}
+
+function restoreReviewContext() {
+  reviewStore.contractId = stringQuery('contractId', reviewStore.contractId)
+  reviewStore.fileId = stringQuery('fileId', reviewStore.fileId)
+  reviewStore.fileName = stringQuery('fileName', reviewStore.fileName)
+  reviewStore.detectedType = stringQuery('detectedType', reviewStore.detectedType || '未分类')
+
+  const confidence = Number(stringQuery('matchConfidence', reviewStore.matchConfidence))
+  reviewStore.matchConfidence = Number.isFinite(confidence) ? confidence : 0
+}
+
+function backToUpload() {
+  reviewStore.reset()
+  step.value = 1
+  if (route.query.resume) router.replace({ name: 'review' })
+}
+
+function queryValue(name) {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+function stringQuery(name, fallback = '') {
+  return String(queryValue(name) || fallback || '')
 }
 </script>
 
