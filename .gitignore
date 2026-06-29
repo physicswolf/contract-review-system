@@ -28,12 +28,3 @@ pnpm-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
-
-# gitignore
-docs/.gitignore
-
-# vibe
-.agents/
-.codex/
-.status/
-AGENTS.md
