@@ -13,16 +13,17 @@ fi
 
 # 启动后端
 cd "$ROOT/backend"
-python3 app.py &
+python3 app.py > "$ROOT/backend.log" 2>&1 &
 BACKEND_PID=$!
-echo "后端已启动 PID=$BACKEND_PID (port 5001)"
+echo "后端已启动 PID=$BACKEND_PID (port 5002)，日志: $ROOT/backend.log"
 
 # 启动前端
 cd "$ROOT/frontend"
-npm run dev &
+npm run dev > "$ROOT/frontend.log" 2>&1 &
 FRONTEND_PID=$!
-echo "前端已启动 PID=$FRONTEND_PID (port 5173)"
+echo "前端已启动 PID=$FRONTEND_PID (port 5273)，日志: $ROOT/frontend.log"
 
-echo "按 Ctrl+C 停止全部服务"
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT TERM
-wait
+echo "后端 PID=$BACKEND_PID，前端 PID=$FRONTEND_PID"
+echo "$BACKEND_PID $FRONTEND_PID" > "$ROOT/pids"
+echo "日志: $ROOT/backend.log / frontend.log"
+echo "停止服务: kill \$(cat $ROOT/pids)"

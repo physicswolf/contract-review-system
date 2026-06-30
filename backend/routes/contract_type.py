@@ -165,6 +165,75 @@ def save_audit_points(ct_id):
         conn.close()
 
 
+@bp.route("/contract-types/<int:ct_id>/audit-points/description", methods=["GET"])
+def get_audit_point_descriptions(ct_id):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, enabled FROM contract_type WHERE id=%s AND deleted_at IS NULL",
+                (ct_id,),
+            )
+            ct = cur.fetchone()
+        if not ct:
+            return jsonify(err(40401, "合同类型不存在或已停用")[0]), 404
+        if not ct["enabled"]:
+            return jsonify(err(40401, "合同类型不存在或已停用")[0]), 404
+
+        dim_id = request.args.get("dimId")
+        sql = """
+            SELECT
+              d.id AS dim_id, d.name AS dim_name, d.sort_order AS dim_sort,
+              ap.id, ap.name, ap.description, ap.instruction, ap.risk_points, ap.sort_order
+            FROM contract_type_audit_point ctap
+            JOIN audit_point ap ON ap.id = ctap.audit_point_id
+            JOIN dimension d ON d.id = ap.dim_id
+            WHERE ctap.contract_type_id = %s
+              AND ctap.enabled = 1
+              AND ap.enabled = 1
+              AND ap.deleted_at IS NULL
+        """
+        params = [ct_id]
+        if dim_id:
+            sql += " AND d.id=%s"
+            params.append(int(dim_id))
+        sql += " ORDER BY d.sort_order, ap.sort_order"
+
+        conn2 = get_conn()
+        try:
+            with conn2.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+        finally:
+            conn2.close()
+
+        dims = {}
+        for r in rows:
+            rp = r.get("risk_points")
+            if isinstance(rp, str):
+                try:
+                    rp = json.loads(rp)
+                except Exception:
+                    rp = []
+            did = r["dim_id"]
+            if did not in dims:
+                dims[did] = {"dimId": did, "dimName": r["dim_name"], "auditPoints": []}
+            dims[did]["auditPoints"].append({
+                "id": r["id"],
+                "name": r["name"],
+                "description": r["description"],
+                "instruction": r["instruction"],
+                "riskPoints": rp or [],
+            })
+
+        return jsonify(ok({
+            "contractType": {"id": ct["id"], "name": ct["name"]},
+            "dimensions": list(dims.values()),
+        }))
+    finally:
+        conn.close()
+
+
 @bp.route("/contract-types/<int:ct_id>/audit-points/<int:ap_id>/enabled", methods=["PATCH"])
 def toggle_ct_audit_point(ct_id, ap_id):
     body = request.get_json() or {}
