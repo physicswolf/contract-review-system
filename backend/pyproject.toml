@@ -9,6 +9,7 @@ dependencies = [
     "bcrypt>=4.0.0",
     "docling",
     "fastapi>=0.115.0,<0.116.0",
+    "httpx>=0.27.0,<0.28.0",
     "jinja2>=3.1.4",
     "pydantic-settings>=2.4.0",
     "pymupdf4llm>=1.27.2.3",
@@ -31,7 +32,6 @@ torch = { index = "pytorch-cpu" }
 
 [dependency-groups]
 dev = [
-    "httpx>=0.27.0,<0.28.0",
     "pytest>=8.2.0",
 ]
 

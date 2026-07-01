@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -27,11 +28,13 @@ from src.services.audit_result_store import audit_result_store
 from src.services.contract_extractor import extract_contract_meta
 from src.services.contract_store import get_contract_repository
 from src.services.file_storage import UploadError
+from src.services.llm_classifier import classify_contract_type
 from src.services.structure_editor import load_document_json
 
 
 router = APIRouter()
 SHANGHAI_TZ = timezone(timedelta(hours=8))
+logger = logging.getLogger(__name__)
 
 
 @router.get("")
@@ -115,12 +118,32 @@ async def upload_contract(file: UploadFile | None = File(default=None)) -> JSONR
     if record is None:
         return error_response(500, "INTERNAL_ERROR", "合同记录保存失败")
 
+    detected_type = str(record.get("contract_type") or "未分类")
+    match_confidence = 96 if detected_type != "未分类" else 50
+    try:
+        llm_result = await asyncio.to_thread(classify_contract_type, result.metadata.id)
+    except Exception:
+        logger.exception("LLM contract type classification failed during upload")
+        llm_result = None
+
+    if llm_result:
+        detected_type, match_confidence = llm_result
+        try:
+            updated = repository.update_by_id(
+                int(record["id"]),
+                {"contract_type": detected_type, "updated_at": _now_iso()},
+            )
+            if updated is not None:
+                record = updated
+        except RuntimeError:
+            logger.exception("Failed to persist LLM contract type classification")
+
     return flat_object(
         {
             "id": str(record["id"]),
             "name": record.get("contract_name") or result.metadata.original_name,
-            "detectedType": record.get("contract_type") or "未分类",
-            "matchConfidence": 96 if record.get("contract_type") != "未分类" else 50,
+            "detectedType": detected_type,
+            "matchConfidence": match_confidence,
             "fileId": result.metadata.id,
             "enableStructureEditor": settings.enable_structure_editor,
         }
