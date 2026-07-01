@@ -38,7 +38,7 @@ import StepUpload from './StepUpload.vue'
 import StepSetup from './StepSetup.vue'
 import UploadProgressOverlay from '../../components/UploadProgressOverlay.vue'
 import { reviewStore } from '../../stores/review'
-import { uploadContract, startAudit } from '../../services/contract.service'
+import { uploadContract, startAudit, cleanupUpload } from '../../services/contract.service'
 import { ENABLE_STRUCTURE_EDITOR } from '../../services/config'
 
 const route = useRoute()
@@ -62,7 +62,7 @@ initializeReviewState()
 
 async function onUploaded(file) {
   const [res] = await Promise.all([uploadContract(file), overlay.value.start()])
-  reviewStore.contractId = String(res.id || '')
+  reviewStore.contractId = ''
   reviewStore.fileId = String(res.fileId || '')
   reviewStore.fileName = String(res.name || file?.name || '')
   reviewStore.detectedType = String(res.detectedType || '未分类')
@@ -73,7 +73,6 @@ async function onUploaded(file) {
       name: 'structureEditor',
       params: { fileId: reviewStore.fileId },
       query: {
-        contractId: reviewStore.contractId,
         fileId: reviewStore.fileId,
         fileName: reviewStore.fileName,
         detectedType: reviewStore.detectedType,
@@ -85,17 +84,20 @@ async function onUploaded(file) {
   step.value = 2
 }
 
-async function onStart() {
-  await startAudit(reviewStore.contractId, {
+async function onStart(auditType) {
+  const res = await startAudit({
+    fileId: reviewStore.fileId,
     role: reviewStore.role,
     points: reviewStore.selectedPoints,
+    contractType: auditType || reviewStore.detectedType || '未分类',
   })
+  reviewStore.contractId = String(res.id || '')
   step.value = 3
   router.push({ name: 'result', params: { id: reviewStore.contractId } })
 }
 
 function initializeReviewState() {
-  const shouldResume = route.query.resume === '1' && (queryValue('contractId') || reviewStore.contractId)
+  const shouldResume = route.query.resume === '1' && (queryValue('fileId') || reviewStore.fileId)
   if (!shouldResume) {
     reviewStore.reset()
     return
@@ -115,7 +117,12 @@ function restoreReviewContext() {
   reviewStore.matchConfidence = Number.isFinite(confidence) ? confidence : 0
 }
 
-function backToUpload() {
+async function backToUpload() {
+  if (reviewStore.fileId) {
+    try {
+      await cleanupUpload(reviewStore.fileId)
+    } catch {}
+  }
   reviewStore.reset()
   step.value = 1
   if (route.query.resume) router.replace({ name: 'review' })

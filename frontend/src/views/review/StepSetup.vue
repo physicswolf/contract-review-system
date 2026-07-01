@@ -138,7 +138,7 @@ async function onStart() {
   }
   submitting.value = true
   try {
-    await emit('start')
+    await emit('start', auditType.value)
   } finally {
     submitting.value = false
   }

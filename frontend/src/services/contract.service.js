@@ -25,14 +25,12 @@ export async function deleteContract(id) {
   return data
 }
 
-// 上传合同（向导 Step1）。返回新建合同 id + 已识别的合同类型（用于回填）。
+// 上传合同（向导 Step1）。仅返回上传文件 id + 已识别的合同类型（用于回填）。
 export async function uploadContract(file) {
   if (USE_MOCK) {
     await delay(null, 600)
-    const contractId = nextId('c')
     const fileId = nextId('f')
     return {
-      id: contractId,
       fileId,
       name: file?.name || '智慧园区软件采购合同.docx',
       detectedType: '采购合同',
@@ -48,13 +46,20 @@ export async function uploadContract(file) {
   return data
 }
 
-// 发起审核（向导 Step2 提交：立场 + 审核点）
-export async function startAudit(contractId, payload) {
+export async function cleanupUpload(fileId) {
+  if (!fileId) return { ok: true }
+  if (USE_MOCK) return delay({ ok: true })
+  const { data } = await http.delete(`/files/${fileId}/artifacts`)
+  return data
+}
+
+// 发起审核（向导 Step2 提交：上传文件 + 类型 + 立场 + 审核点）
+export async function startAudit(payload) {
   if (USE_MOCK) {
     await delay(null, 500)
-    return { id: contractId, status: 'done' }
+    return { id: nextId('c'), status: 'done' }
   }
-  const { data } = await http.post(`/contracts/${contractId}/audit`, payload)
+  const { data } = await http.post('/contracts/audit', payload)
   return data
 }
 

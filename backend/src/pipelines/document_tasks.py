@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -21,7 +20,6 @@ from src.services.file_storage import StoredUpload, delete_stored_upload
 
 SHANGHAI_TZ = timezone(timedelta(hours=8))
 TaskStatus = Literal["queued", "running", "succeeded", "failed"]
-_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -122,7 +120,6 @@ class DocumentTaskManager:
                 stored_upload.metadata.extension,
                 settings,
             )
-            self._record_contract(stored_upload.metadata.id, settings)
             self._update(
                 task_id,
                 status="succeeded",
@@ -146,16 +143,6 @@ class DocumentTaskManager:
     def _get_stored_upload(self, task_id: str) -> StoredUpload:
         with self._lock:
             return self._tasks[task_id].stored_upload
-
-    def _record_contract(self, file_id: str, settings: Settings) -> None:
-        try:
-            from src.services.contract_extractor import extract_contract_meta
-            from src.services.contract_store import get_contract_repository
-
-            meta = extract_contract_meta(file_id, settings)
-            get_contract_repository(settings).upsert_by_file_id(meta)
-        except Exception:
-            _LOGGER.exception("Failed to upsert contract record for file_id=%s", file_id)
 
     def _update(
         self,
