@@ -92,6 +92,72 @@ async def test_contract_type_save_audit_points(
 
 
 @pytest.mark.anyio
+async def test_contract_type_audit_point_descriptions(
+    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: dict[str, str],
+) -> None:
+    seen: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        contract_type_repository,
+        "find_by_id_tmp",
+        lambda type_id: {"id": type_id, "name": "采购合同", "enabled": 1},
+    )
+
+    def find_descriptions_by_contract_type(type_id: int, dim_id: int | None = None) -> list[dict[str, object]]:
+        seen["type_id"] = type_id
+        seen["dim_id"] = dim_id
+        return [
+            {
+                "dim_id": 2,
+                "dim_name": "履约风险",
+                "id": 9,
+                "name": "交付期限",
+                "description": "核查交付时间约定",
+                "instruction": "检查是否存在明确交付期限",
+                "risk_points": '[{"name":"期限不明","highStd":"未约定交付期限"}]',
+            }
+        ]
+
+    monkeypatch.setattr(
+        audit_point_repository,
+        "find_descriptions_by_contract_type",
+        find_descriptions_by_contract_type,
+    )
+
+    async with make_client() as client:
+        response = await client.get(
+            "/api/contract-types/7/audit-points/description?dimId=2",
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    assert seen == {"type_id": 7, "dim_id": 2}
+    assert response.json() == {
+        "code": 0,
+        "msg": "ok",
+        "data": {
+            "contractType": {"id": 7, "name": "采购合同"},
+            "dimensions": [
+                {
+                    "dimId": 2,
+                    "dimName": "履约风险",
+                    "auditPoints": [
+                        {
+                            "id": 9,
+                            "name": "交付期限",
+                            "description": "核查交付时间约定",
+                            "instruction": "检查是否存在明确交付期限",
+                            "riskPoints": [{"name": "期限不明", "highStd": "未约定交付期限"}],
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+
+
+@pytest.mark.anyio
 async def test_internal_match_requires_name_and_stance() -> None:
     async with make_client() as client:
         response = await client.get("/api/internal/contract-types/match")

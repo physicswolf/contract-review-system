@@ -63,6 +63,45 @@ class AuditPointRepository:
         except pymysql.err.DatabaseError as exc:
             raise RuntimeError(f"MySQL 合同类型审查点读取失败: {exc}") from exc
 
+    def find_descriptions_by_contract_type(
+        self,
+        type_id: int,
+        dim_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        try:
+            conn = db_pool.get_connection()
+            try:
+                with conn.cursor() as cursor:
+                    sql = """
+                        SELECT d.id AS dim_id,
+                               d.name AS dim_name,
+                               d.sort_order AS dim_sort,
+                               ap.id,
+                               ap.name,
+                               ap.description,
+                               ap.instruction,
+                               ap.risk_points,
+                               ap.sort_order
+                          FROM contract_type_audit_point ctap
+                          JOIN audit_point ap ON ap.id = ctap.audit_point_id
+                          JOIN dimension d ON d.id = ap.dim_id
+                         WHERE ctap.contract_type_id = %(type_id)s
+                           AND ctap.enabled = 1
+                           AND ap.enabled = 1
+                           AND ap.deleted_at IS NULL
+                    """
+                    params: dict[str, Any] = {"type_id": type_id}
+                    if dim_id is not None:
+                        sql += " AND d.id = %(dim_id)s"
+                        params["dim_id"] = dim_id
+                    sql += " ORDER BY d.sort_order ASC, ap.sort_order ASC, ap.id ASC"
+                    cursor.execute(sql, params)
+                    return [dict(row) for row in cursor.fetchall()]
+            finally:
+                conn.close()
+        except pymysql.err.DatabaseError as exc:
+            raise RuntimeError(f"MySQL 审查点说明读取失败: {exc}") from exc
+
     def insert(self, payload: dict[str, Any]) -> int:
         data = self._payload(payload)
         try:

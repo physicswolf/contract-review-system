@@ -182,6 +182,13 @@
 - **核对**：`PointEdit.vue` 已提交/回显 `note`、`risks`、`def`、`examples`；`api/adapters.py` 已映射 `note`、`risks`、`def`、`examples`；`004/007` 迁移已使用前端 JSON 字段；审核结果生成已读取 `overview/solution/clause`
 - **验证**：运行 `npm run build` 通过；运行 `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，46 tests passed；运行 FastAPI 路由注册检查通过
 - **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+
+---
+
+## 2026-07-01 — 本周工作内容报告整理
+
+- **依据**：读取 `teach_design/上传解析/` 与 `teach_design/任务列表/` 下相关设计说明和解析调用说明。
+- **动作**：提炼文件上传、文档解析、合同任务列表三项本周文档编写成果，输出 500 字以内工作报告。
 - **结论**：按现有最新文档没有发现必须继续开发的功能缺口；剩余事项主要是联调验收和后续生产化增强
 
 ---
@@ -260,3 +267,102 @@
   - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+
+---
+
+## 2026-07-01 12:31:42 CST — worktree 改动融合开发
+
+- **依据**：读取最新 `docs/planning/worktree改动融合计划书.md` 与 `docs/develop/worktree改动融合设计说明书.md`
+- **后端动作**：在 `backend/src/api/contract_types.py` 新增 `GET /api/contract-types/{type_id}/audit-points/description?dimId=`，返回合同类型和按维度分组的审查点说明；校验合同类型存在且启用
+- **仓储动作**：在 `backend/src/services/audit_point_store.py` 新增 `find_descriptions_by_contract_type()`，查询合同类型关联的已启用审查点并支持 `dim_id` 筛选
+- **前端动作**：更新 `frontend/src/services/config.js`，保留 `VITE_API_BASE` 覆盖能力，并在 localhost 默认指向 `http://localhost:8000/api`，远程默认走同源 `/api`
+- **测试动作**：在 `backend/tests/test_config_api.py` 增加新接口响应分组和 `dimId` 透传测试
+- **验证**：
+  - `python3 -m compileall backend/src` 通过
+  - FastAPI 路由注册检查确认包含 `/api/contract-types/{type_id}/audit-points/description`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`52 passed`
+  - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+
+---
+
+## 2026-07-01 13:23:16 CST — 合同类型管理独立页面改造
+
+- **依据**：读取最新 `docs/planning/合同类型管理独立页面改造计划书.md` 与 `docs/develop/合同类型管理独立页面改造设计说明书.md`
+- **路由动作**：在 `frontend/src/router/index.js` 新增 `/config/contract-types/new` 与 `/config/contract-types/:id/edit`，指向合同类型独立编辑页
+- **页面动作**：新增 `frontend/src/views/config/ContractTypeEdit.vue`，支持新建/编辑合同类型，保存后返回 `ConfigCenter` 的合同类型管理 Tab
+- **列表动作**：更新 `frontend/src/views/config/ConfigCenter.vue`，新建和编辑入口改为路由跳转；删除合同类型编辑弹层相关状态、函数和样式；保留关联审核点弹层
+- **关联修复**：关联审核点弹层恢复为读取 `linkedAuditPoints` 并调用 `saveAuditPoints()` 保存真实关联；同时兼容 Mock 字符串 ID
+- **服务动作**：更新 `frontend/src/services/type.service.js`，Mock 模式下兼容路由字符串 ID，并在保存关联时更新运行时 `linkedAuditPoints`
+- **验证**：
+  - 旧合同类型编辑弹层相关标识扫描无残留
+  - `python3 -m compileall backend/src` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`52 passed`
+  - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`、pytest 缓存和 Python `__pycache__`
+
+---
+
+## 2026-07-01 13:35:06 CST — 合同类型编辑页左侧列表 bar 恢复
+
+- **依据**：用户反馈新建页面和编辑页面仍需保留原合同类型管理左侧列表 bar
+- **动作**：更新 `frontend/src/views/config/ContractTypeEdit.vue`，将独立编辑页调整为左侧合同类型列表 + 右侧表单布局
+- **结果**：左侧 bar 显示合同类型名称、立场、关联审查点数和启停状态；支持点击合同类型切换到对应编辑路由；新建页左侧保留“＋ 新建”入口并高亮当前新建状态
+- **数据处理**：编辑页加载时同步拉取 `listTypes()`，并通过 `watch(route.name, route.params.id)` 响应同组件内路由切换，避免点击左侧列表后表单不刷新
+- **验证**：
+  - `npm run build` 通过；仅有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-01 13:45:56 CST — 合同类型数据库灌数
+
+- **目标库**：按 `backend/.env` 连接 MySQL `192.168.1.155:3306/aizhiqi`
+- **动作**：直接执行 `backend/src/db/migrations/009_seed_tmp_config_data.sql` 中的 4 条幂等 `INSERT IGNORE` 种子语句，未运行完整 `run_migrations()`，避免重复触发已记录迁移
+- **权限处理**：首次执行被沙箱网络权限拦截；经授权后在沙箱外连接 MySQL 执行成功
+- **影响行数**：`dimension` 4 行、`audit_point` 18 行、`contract_type` 6 行、`contract_type_audit_point` 0 行；关联表 0 行表示对应关联数据已存在且被 `INSERT IGNORE` 跳过
+- **核对结果**：`contract_type` 当前 6 条，`contract_type_audit_point` 当前 33 条；合同类型包括采购合同、服务合同、销售合同、租赁合同、合作协议、补充协议
+
+---
+
+## 2026-07-01 15:33:36 CST — 大模型调用路径巡检
+
+- **动作**：扫描 `backend/src`、`frontend/src`、`docs`、`teach_design` 中与 `LLM`、`prompt`、`chat/completions`、`大模型`、`AI识别` 相关的代码和文档
+- **结果**：当前可运行后端代码没有真实出站大模型调用，也没有构造 chat prompt；`backend/src/config.py` 仅保留 `LLM_API_URL`、`LLM_API_KEY`、`LLM_MODEL_NAME` 配置占位
+- **实现现状**：上传后的合同类型识别来自 `contract_extractor.py` 的解析结果和文件名关键词规则；审核结果来自数据库审查点的 `risk_points` 与 `default_result` 规则降级
+- **文档区分**：`teach_design/审核详情页/技术设计-审核详情页.md` 描述了后续 LLM prompt 注入 top-K blocks 并返回 `hit_block_no` 等字段的目标方案，但该方案尚未落入当前运行代码
+
+---
+
+## 2026-07-01 15:49:54 CST — demo 用户创建与 contract_type 单表灌数
+
+- **目标库**：按 `backend/.env` 连接 MySQL `192.168.1.155:3306/aizhiqi`
+- **用户动作**：读取 `yilu@company.com` 的 `company`、`role`、`phone`、`status`，创建 `demo@company.com`，密码写入 bcrypt hash；未新增独立权限表数据，因为当前项目用户权限由 `user.role/status` 表达
+- **合同类型动作**：只对 `contract_type` 表执行 `009_seed_tmp_config_data.sql` 中对应的 6 条 `INSERT IGNORE` 种子数据；未执行 `dimension`、`audit_point`、`contract_type_audit_point` 等其他灌数语句
+- **结果**：`demo@company.com` 新建成功，角色为 `企业管理员`，状态为启用；`contract_type` 插入 6 条，当前有效合同类型总数 6
+- **校验**：`demo@company.com` 使用 `12345678` 通过 bcrypt 校验；`contract_type` 包含采购合同、服务合同、销售合同、租赁合同、合作协议、补充协议
+
+---
+
+## 2026-07-01 16:07:46 CST — 大模型合同类型识别开发启动
+
+- **依据**：读取最新 `docs/planning/大模型合同类型识别计划书.md` 与 `docs/develop/大模型合同类型识别设计说明书.md`
+- **范围确认**：本轮仅改造上传后的合同类型识别；审核结果 LLM 研判和前端界面不在本轮范围
+- **上下文检查**：确认 `contracts.upload_contract()` 当前使用关键词规则结果；`contract_type_repository.find_all({"enabled": 1})` 可读取启用类型；`ContractRepository.update_by_id()` 支持更新 `contract_type`
+
+### 开发完成记录
+
+- **新增服务**：创建 `backend/src/services/llm_classifier.py`，实现合同首部提取、启用合同类型读取、prompt 构造、OpenAI-compatible chat API 调用、返回值校验和异常降级
+- **上传集成**：更新 `backend/src/api/contracts.py`，在 `POST /api/contracts/upload` 解析并保存合同后通过 `asyncio.to_thread()` 调用 LLM 分类；成功时写回 `contracts.contract_type` 并返回新的 `detectedType/matchConfidence`；失败时保留关键词规则结果
+- **配置依赖**：在 `backend/src/config.py` 与 `backend/.env.example` 增加 `LLM_CLASSIFY_TIMEOUT=10`；将 `httpx` 从 dev dependency 移入正式依赖并执行 `uv lock`
+- **测试覆盖**：新增 `backend/tests/test_llm_classifier.py`，覆盖 preamble 提取、根节点正文降级、prompt/HTTP 请求、有效返回、无效返回和未配置 URL 降级
+- **验证**：
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv lock` 通过
+  - `python3 -m compileall backend/src` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_llm_classifier.py tests/test_contracts_api.py` 通过，`9 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`57 passed`
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`

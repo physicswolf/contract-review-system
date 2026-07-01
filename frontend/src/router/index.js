@@ -17,6 +17,8 @@ const routes = [
       { path: 'contracts/:id/result', name: 'result', component: () => import('../views/contract/AuditResult.vue') },
 
       { path: 'config', name: 'config', component: () => import('../views/config/ConfigCenter.vue') },
+      { path: 'config/contract-types/new', name: 'contractTypeNew', component: () => import('../views/config/ContractTypeEdit.vue') },
+      { path: 'config/contract-types/:id/edit', name: 'contractTypeEdit', component: () => import('../views/config/ContractTypeEdit.vue') },
       { path: 'config/dimensions', name: 'configDimensions', component: () => import('../views/config/DimensionManage.vue') },
       { path: 'config/dimensions/select', name: 'dimensionSelect', component: () => import('../views/config/DimensionSelect.vue') },
       { path: 'config/points/:id/edit', name: 'pointEdit', component: () => import('../views/config/PointEdit.vue') },

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     llm_api_url: str = "http://localhost:11434/v1/chat/completions"
     llm_api_key: str = "ollama"
     llm_model_name: str = "qwen3:32b"
+    llm_classify_timeout: int = Field(default=10, gt=0)
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
