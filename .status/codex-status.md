@@ -366,3 +366,24 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`57 passed`
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`
+
+---
+
+## 2026-07-01 16:28:42 CST — LLM 合同类型识别日志开关开发启动
+
+- **依据**：用户要求为大模型合同类型识别增加日志打印，将 LLM 调用及返回过程写入日志文件，并可通过环境参数开关控制
+- **范围确认**：只改造本轮新增的合同类型 LLM 分类路径；不改前端、不改审核结果 LLM 研判
+- **实现约定**：新增日志启停和日志文件路径配置；日志记录请求/响应/prompt/解析结果/异常，鉴权 token 做脱敏处理，避免密钥落盘
+
+### 开发完成记录
+
+- **配置动作**：在 `backend/src/config.py` 增加 `llm_classify_log_enabled`、`llm_classify_log_file` 和 `llm_classify_log_path`；在 `backend/.env.example` 增加 `LLM_CLASSIFY_LOG_ENABLED=false`、`LLM_CLASSIFY_LOG_FILE=logs/llm_classifier.log`
+- **日志动作**：更新 `backend/src/services/llm_classifier.py`，在分类开始、首部提取、类型清单读取、prompt 构造、LLM request、LLM response、content 提取、匹配成功、降级和异常场景写入 JSON Lines 日志
+- **安全处理**：请求体和 prompt 完整写入；`Authorization` 请求头写入为 `Bearer ***`，不落盘真实 `LLM_API_KEY`
+- **测试动作**：更新 `backend/tests/test_llm_classifier.py`，新增日志开关开启时写入请求/响应/匹配事件、关闭时不生成日志文件的测试
+- **验证**：
+  - `python3 -m compileall backend/src` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_llm_classifier.py` 通过，`7 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`59 passed`
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`

@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     llm_api_key: str = "ollama"
     llm_model_name: str = "qwen3:32b"
     llm_classify_timeout: int = Field(default=10, gt=0)
+    llm_classify_log_enabled: bool = False
+    llm_classify_log_file: Path = Path("logs/llm_classifier.log")
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
@@ -58,6 +60,13 @@ class Settings(BaseSettings):
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def llm_classify_log_path(self) -> Path:
+        path = self.llm_classify_log_file
+        if not path.is_absolute():
+            path = BASE_DIR / path
+        return path.resolve()
 
 
 @lru_cache

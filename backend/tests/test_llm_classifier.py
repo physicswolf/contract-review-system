@@ -115,6 +115,93 @@ def test_classify_contract_type_calls_llm_and_validates_result(
     assert "- 采购合同" in captured["json"]["messages"][1]["content"]
 
 
+def test_classify_contract_type_writes_llm_log_when_enabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    log_file = tmp_path / "logs" / "llm.log"
+    settings = make_settings(
+        tmp_path,
+        llm_classify_log_enabled=True,
+        llm_classify_log_file=log_file,
+    )
+    write_document(
+        settings,
+        "file-log",
+        {
+            "contract_structure": {
+                "kind": "root",
+                "children": [
+                    {
+                        "kind": "preamble",
+                        "content": [{"text": "智慧园区软件采购合同"}],
+                    }
+                ],
+            }
+        },
+    )
+
+    monkeypatch.setattr(llm_classifier, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        llm_classifier.contract_type_repository,
+        "find_all",
+        lambda filters: [{"name": "采购合同"}, {"name": "服务合同"}],
+    )
+    monkeypatch.setattr(llm_classifier.httpx, "post", lambda *args, **kwargs: FakeResponse("采购合同"))
+
+    result = llm_classifier.classify_contract_type("file-log")
+
+    assert result == ("采购合同", 96)
+    events = read_log_events(log_file)
+    event_names = [event["event"] for event in events]
+    assert "llm.request" in event_names
+    assert "llm.response" in event_names
+    assert "llm.content" in event_names
+    assert "classification.matched" in event_names
+
+    request_event = next(event for event in events if event["event"] == "llm.request")
+    assert request_event["payload"]["headers"]["Authorization"] == "Bearer ***"
+    assert "智慧园区软件采购合同" in request_event["payload"]["body"]["messages"][1]["content"]
+
+    response_event = next(event for event in events if event["event"] == "llm.response")
+    assert response_event["payload"]["status_code"] == 200
+    assert "采购合同" in response_event["payload"]["body"]
+
+
+def test_classify_contract_type_does_not_write_log_when_disabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    log_file = tmp_path / "logs" / "disabled.log"
+    settings = make_settings(
+        tmp_path,
+        llm_classify_log_enabled=False,
+        llm_classify_log_file=log_file,
+    )
+    write_document(
+        settings,
+        "file-no-log",
+        {
+            "contract_structure": {
+                "kind": "root",
+                "content": [{"text": "服务合同"}],
+                "children": [],
+            }
+        },
+    )
+
+    monkeypatch.setattr(llm_classifier, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        llm_classifier.contract_type_repository,
+        "find_all",
+        lambda filters: [{"name": "采购合同"}, {"name": "服务合同"}],
+    )
+    monkeypatch.setattr(llm_classifier.httpx, "post", lambda *args, **kwargs: FakeResponse("服务合同"))
+
+    assert llm_classifier.classify_contract_type("file-no-log") == ("服务合同", 96)
+    assert not log_file.exists()
+
+
 def test_classify_contract_type_returns_none_for_unlisted_result(
     tmp_path: Path,
     monkeypatch,
@@ -158,6 +245,9 @@ def test_classify_contract_type_skips_llm_when_url_blank(monkeypatch) -> None:
 class FakeResponse:
     def __init__(self, content: str) -> None:
         self._content = content
+        self.status_code = 200
+        self.headers = {"content-type": "application/json"}
+        self.text = json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False)
 
     def raise_for_status(self) -> None:
         return None
@@ -171,6 +261,8 @@ def make_settings(
     *,
     llm_api_url: str = "http://llm.example/v1/chat/completions",
     llm_classify_timeout: int = 10,
+    llm_classify_log_enabled: bool = False,
+    llm_classify_log_file: Path | None = None,
 ) -> Settings:
     return Settings(
         parsing_dir=tmp_path / "parsing",
@@ -178,6 +270,8 @@ def make_settings(
         llm_api_key="test-key",
         llm_model_name="test-model",
         llm_classify_timeout=llm_classify_timeout,
+        llm_classify_log_enabled=llm_classify_log_enabled,
+        llm_classify_log_file=llm_classify_log_file or tmp_path / "llm.log",
     )
 
 
@@ -188,3 +282,7 @@ def write_document(settings: Settings, file_id: str, document: dict) -> None:
         json.dumps(document, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+def read_log_events(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
