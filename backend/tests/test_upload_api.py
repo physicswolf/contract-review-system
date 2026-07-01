@@ -101,6 +101,31 @@ async def test_get_file_metadata(client, auth_headers):
 
 
 @pytest.mark.anyio
+async def test_delete_upload_artifacts_removes_upload_and_parsing_files(
+    client,
+    isolated_upload_dir,
+    auth_headers,
+):
+    upload_response = await client.post(
+        "/api/files/upload",
+        files={"file": ("采购合同.pdf", valid_pdf(), "application/pdf")},
+        headers=auth_headers,
+    )
+    payload = upload_response.json()
+    file_id = payload["file"]["id"]
+    await wait_for_task(client, payload["task"]["id"], "succeeded", auth_headers)
+    assert list(isolated_upload_dir["uploads"].rglob(f"{file_id}.*"))
+    assert (isolated_upload_dir["parsing"] / file_id / "document.json").is_file()
+
+    response = await client.delete(f"/api/files/{file_id}/artifacts", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert list(isolated_upload_dir["uploads"].rglob(f"{file_id}.*")) == []
+    assert not (isolated_upload_dir["parsing"] / file_id).exists()
+
+
+@pytest.mark.anyio
 async def test_upload_valid_docx(client, isolated_upload_dir, auth_headers):
     content = valid_docx()
     response = await client.post(

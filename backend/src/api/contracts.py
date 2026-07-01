@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import shutil
-from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -29,7 +28,7 @@ from src.services.contract_extractor import extract_contract_meta
 from src.services.contract_store import get_contract_repository
 from src.services.file_storage import UploadError
 from src.services.llm_classifier import classify_contract_type
-from src.services.structure_editor import load_document_json
+from src.services.structure_editor import document_exists, load_document_json
 
 
 router = APIRouter()
@@ -104,21 +103,8 @@ async def upload_contract(file: UploadFile | None = File(default=None)) -> JSONR
         message = task.error.message if task.error else "文档解析失败"
         return error_response(500, "DOCUMENT_TASK_FAILED", message)
 
-    try:
-        repository = get_contract_repository()
-        record = repository.find_by_file_id(result.metadata.id)
-        if record is None:
-            contract_id = repository.upsert_by_file_id(
-                extract_contract_meta(result.metadata.id, settings)
-            )
-            record = repository.find_by_id(contract_id)
-    except RuntimeError:
-        return error_response(500, "INTERNAL_ERROR", "合同记录保存失败")
-
-    if record is None:
-        return error_response(500, "INTERNAL_ERROR", "合同记录保存失败")
-
-    detected_type = str(record.get("contract_type") or "未分类")
+    meta = extract_contract_meta(result.metadata.id, settings)
+    detected_type = str(meta.get("contract_type") or "未分类")
     match_confidence = 96 if detected_type != "未分类" else 50
     try:
         llm_result = await asyncio.to_thread(classify_contract_type, result.metadata.id)
@@ -128,26 +114,63 @@ async def upload_contract(file: UploadFile | None = File(default=None)) -> JSONR
 
     if llm_result:
         detected_type, match_confidence = llm_result
-        try:
-            updated = repository.update_by_id(
-                int(record["id"]),
-                {"contract_type": detected_type, "updated_at": _now_iso()},
-            )
-            if updated is not None:
-                record = updated
-        except RuntimeError:
-            logger.exception("Failed to persist LLM contract type classification")
 
     return flat_object(
         {
-            "id": str(record["id"]),
-            "name": record.get("contract_name") or result.metadata.original_name,
+            "name": meta.get("contract_name") or result.metadata.original_name,
             "detectedType": detected_type,
             "matchConfidence": match_confidence,
             "fileId": result.metadata.id,
             "enableStructureEditor": settings.enable_structure_editor,
         }
     )
+
+
+@router.post("/audit")
+async def start_audit_from_upload(payload: dict[str, Any]) -> JSONResponse:
+    file_id = str(payload.get("fileId") or payload.get("file_id") or "").strip()
+    role = str(payload.get("role") or "甲方")
+    contract_type = str(payload.get("contractType") or payload.get("contract_type") or "未分类")
+    point_ids = [int(point_id) for point_id in payload.get("points") or []]
+    if not file_id:
+        return error_response(422, "FILE_ID_REQUIRED", "请提供文件 ID")
+    if not point_ids:
+        return error_response(422, "POINTS_REQUIRED", "请至少选择一个审核点")
+
+    settings = get_settings()
+    if not document_exists(file_id, settings):
+        return error_response(404, "DOCUMENT_NOT_FOUND", "文档不存在或尚未解析完成")
+
+    try:
+        meta = extract_contract_meta(file_id, settings)
+    except Exception:
+        logger.exception("Contract metadata extraction failed for file_id=%s", file_id)
+        return error_response(500, "INTERNAL_ERROR", "合同元信息提取失败")
+
+    now = _now_iso()
+    meta["contract_type"] = contract_type
+    meta["review_time"] = now
+    meta["created_at"] = now
+    meta["updated_at"] = now
+
+    try:
+        repository = get_contract_repository()
+        contract_id = repository.upsert_by_file_id(meta)
+        contract = repository.find_by_id(contract_id)
+    except RuntimeError:
+        return error_response(500, "INTERNAL_ERROR", "合同记录创建失败")
+
+    if contract is None:
+        return error_response(500, "INTERNAL_ERROR", "合同记录创建失败")
+
+    try:
+        _create_audit_result(repository, contract_id, contract, role, point_ids)
+    except ValueError:
+        return error_response(422, "POINTS_REQUIRED", "未找到可用审核点")
+    except RuntimeError:
+        return error_response(500, "INTERNAL_ERROR", "审核执行失败")
+
+    return flat_object({"id": str(contract_id), "status": "done"})
 
 
 @router.post("/{contract_id}/audit")
@@ -162,40 +185,51 @@ async def start_audit(contract_id: int, payload: dict[str, Any]) -> JSONResponse
         contract = repository.find_by_id(contract_id)
         if contract is None:
             return error_response(404, "CONTRACT_NOT_FOUND", "合同不存在")
-
-        points = [
-            point
-            for point_id in point_ids
-            if (point := audit_point_repository.find_by_id(point_id)) is not None
-        ]
-        if not points:
-            return error_response(422, "POINTS_REQUIRED", "未找到可用审核点")
-
-        task_id = audit_result_store.create_task(contract_id, role)
-        original_blocks = _original_text_for_contract(contract, [])
-        items = _build_audit_items(points, original_blocks)
-        stats = _build_dimension_stats(items)
-        audit_result_store.insert_results(task_id, items)
-        audit_result_store.insert_stats(task_id, stats)
-        major_count = sum(1 for item in items if item["risk_level"] == 1)
-        general_count = len(items) - major_count
-        audit_result_store.complete_task(
-            task_id,
-            total=len(items),
-            major=major_count,
-            general=general_count,
-        )
-        risk, risk_level = _risk_summary(major_count, general_count)
-        repository.update_risk_cache(
-            contract_id,
-            risk=risk,
-            risk_count=len(items),
-            risk_level=risk_level,
-        )
+        _create_audit_result(repository, contract_id, contract, role, point_ids)
+    except ValueError:
+        return error_response(422, "POINTS_REQUIRED", "未找到可用审核点")
     except RuntimeError:
         return error_response(500, "INTERNAL_ERROR", "审核执行失败")
 
     return flat_object({"id": str(contract_id), "status": "done"})
+
+
+def _create_audit_result(
+    repository: Any,
+    contract_id: int,
+    contract: dict[str, Any],
+    role: str,
+    point_ids: list[int],
+) -> None:
+    points = [
+        point
+        for point_id in point_ids
+        if (point := audit_point_repository.find_by_id(point_id)) is not None
+    ]
+    if not points:
+        raise ValueError("未找到可用审核点")
+
+    task_id = audit_result_store.create_task(contract_id, role)
+    original_blocks = _original_text_for_contract(contract, [])
+    items = _build_audit_items(points, original_blocks)
+    stats = _build_dimension_stats(items)
+    audit_result_store.insert_results(task_id, items)
+    audit_result_store.insert_stats(task_id, stats)
+    major_count = sum(1 for item in items if item["risk_level"] == 1)
+    general_count = len(items) - major_count
+    audit_result_store.complete_task(
+        task_id,
+        total=len(items),
+        major=major_count,
+        general=general_count,
+    )
+    risk, risk_level = _risk_summary(major_count, general_count)
+    repository.update_risk_cache(
+        contract_id,
+        risk=risk,
+        risk_count=len(items),
+        risk_level=risk_level,
+    )
 
 
 @router.get("/{contract_id}/result")

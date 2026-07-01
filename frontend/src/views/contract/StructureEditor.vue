@@ -198,6 +198,7 @@ import {
   getDocumentStructure,
   saveDocumentStructure,
 } from '../../services/document.service'
+import { cleanupUpload } from '../../services/contract.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -364,7 +365,6 @@ async function finishEditing() {
     name: 'review',
     query: {
       resume: '1',
-      contractId: reviewStore.contractId,
       fileId: reviewStore.fileId,
       fileName: reviewStore.fileName,
       detectedType: reviewStore.detectedType,
@@ -374,7 +374,16 @@ async function finishEditing() {
 }
 
 async function backToUpload() {
-  router.push({ name: 'review' })
+  syncReviewStoreFromRoute()
+  const fileIdToCleanup = reviewStore.fileId
+  const failure = await router.push({ name: 'review' })
+  if (failure) return
+  if (fileIdToCleanup) {
+    try {
+      await cleanupUpload(fileIdToCleanup)
+    } catch {}
+  }
+  reviewStore.reset()
 }
 
 function syncReviewStoreFromRoute() {
@@ -386,7 +395,7 @@ function syncReviewStoreFromRoute() {
 }
 
 function canResumeReview() {
-  return Boolean(route.query.contractId || reviewStore.contractId)
+  return Boolean(route.query.fileId || fileId.value || reviewStore.fileId)
 }
 
 function selectCreatedNode(node) {

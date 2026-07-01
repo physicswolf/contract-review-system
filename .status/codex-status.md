@@ -387,3 +387,24 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`59 passed`
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`
+
+---
+
+## 2026-07-01 17:49:57 CST — 合同记录写入时机与文件清理开发启动
+
+- **依据**：读取最新 `docs/planning/合同记录写入时机与文件清理计划书.md` 与 `docs/develop/合同记录写入时机与文件清理设计说明书.md`
+- **范围确认**：上传合同后不再写入 `contracts` 表；开始审核时再创建合同记录；返回上传/重新上传时调用文件清理接口删除上传文件和解析目录
+- **注意事项**：`document_tasks.py` 属于解析管线文件，本轮仅移除合同记录写入副作用，不改解析逻辑
+
+### 开发完成记录
+
+- **后端动作**：`POST /api/contracts/upload` 移除 `contracts` 写入和 `id` 返回；新增 `POST /api/contracts/audit`，按 `fileId/role/points/contractType` 在发起审核时创建合同记录并复用审核结果生成逻辑；缺失解析产物时返回 404 且不写合同；保留旧 `POST /api/contracts/{id}/audit` 兼容路径
+- **清理动作**：`document_tasks.py` 移除解析成功后的自动合同写入；`DELETE /api/files/{file_id}/artifacts` 删除上传文件、元数据和解析目录
+- **前端动作**：上传后只保存 `fileId`；审核设置页开始分析时调用新审核端点并保存返回的 `contractId`；审核设置页和结构编辑页返回上传时调用 `cleanupUpload(fileId)`；结构编辑恢复审核上下文改为依赖 `fileId`
+- **测试覆盖**：新增审核新端点测试，确认审核前无合同记录、审核时创建合同记录并写入用户确认的合同类型；新增缺失解析产物不写合同测试；新增文件 artifacts 清理测试，确认上传文件和解析目录被删除
+- **验证**：
+  - `python3 -m compileall backend/src backend/tests` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`62 passed`
+  - `npm run build` 通过；仅出现既有 Vite/Rollup chunk size 与依赖注释提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`、`backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`

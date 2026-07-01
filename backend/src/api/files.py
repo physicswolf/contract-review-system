@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import asdict
 
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from src.api.responses import error_response
+from src.api.responses import error_response, ok_deleted
 from src.config import get_settings
 from src.pipelines.document_upload import (
     DOCUMENT_UPLOAD_PIPELINE_ERRORS,
@@ -59,3 +60,19 @@ async def get_file_metadata(file_id: str) -> dict | JSONResponse:
     if metadata is None:
         return error_response(404, "FILE_NOT_FOUND", "文件不存在")
     return FileData(file=metadata).model_dump()
+
+
+@router.delete("/{file_id}/artifacts")
+async def delete_upload_artifacts(file_id: str) -> JSONResponse:
+    settings = get_settings()
+
+    if settings.upload_root.exists():
+        for path in settings.upload_root.rglob(f"{file_id}.*"):
+            if path.is_file():
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    shutil.rmtree(settings.parsing_root / file_id, ignore_errors=True)
+    return ok_deleted()
