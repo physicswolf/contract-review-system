@@ -487,3 +487,17 @@
 - **密码**：`12345678` 已按项目登录逻辑写入 bcrypt hash
 - **结果**：`demo@company.com` 创建成功，`id=2`，角色为 `企业管理员`，状态为启用
 - **验证**：使用 `verify_password("12345678", password_hash)` 校验通过
+
+---
+
+## 2026-07-02 01:36:42 CST — DOCX 转 PDF 前清空页眉页脚
+
+- **依据**：用户要求当 `DOCX_PARSER_ENGINE` 为 `docling` 或 `pymupdf4llm` 时，先用 `python-docx` 清空页眉、页脚等内容，再执行 DOCX 转 PDF
+- **实现动作**：更新 `backend/src/services/document_parser.py`，新增 `remove_docx_headers_footers()` 和 `clear_docx_story_part()`；DOCX 经 PDF 路径解析前先生成 `document.no-header-footer.docx`，再交给 LibreOffice 转换为 `document.pdf`
+- **保留行为**：`DOCX_PARSER_ENGINE=python-docx` 不走 PDF 转换路径，保持原有解析逻辑
+- **测试动作**：更新 `backend/tests/test_document_parser.py`，覆盖 `docling` 与 `pymupdf4llm` DOCX 解析都会先清理页眉页脚，并新增真实 DOCX 清理页眉、页脚、页眉表格且保留正文的测试
+- **验证**：
+  - `python3 -m py_compile backend/src/services/document_parser.py backend/tests/test_document_parser.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_document_parser.py` 通过，`12 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`64 passed`
+  - `git diff --check` 通过

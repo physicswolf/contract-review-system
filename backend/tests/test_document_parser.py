@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from docx import Document
 
 from src.config import Settings
 from src.services import document_parser
@@ -149,9 +150,17 @@ def test_docx_parsing_saves_converted_pdf_then_json(tmp_path, monkeypatch):
     source_path.write_bytes(b"docx")
     settings = make_settings(tmp_path)
     converted_inputs = []
+    cleaned_inputs = []
+
+    def fake_remove_docx_headers_footers(input_path: Path, output_path: Path):
+        assert input_path == source_path
+        assert output_path == settings.parsing_root / "file-uuid" / "document.no-header-footer.docx"
+        output_path.write_bytes(b"clean docx")
+        cleaned_inputs.append(output_path)
+        return output_path
 
     def fake_convert_docx_to_pdf(input_path: Path, output_path: Path):
-        assert input_path == source_path
+        assert input_path == settings.parsing_root / "file-uuid" / "document.no-header-footer.docx"
         output_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
         return output_path
 
@@ -159,6 +168,11 @@ def test_docx_parsing_saves_converted_pdf_then_json(tmp_path, monkeypatch):
         converted_inputs.append(input_path)
         return {"texts": ["合同"]}
 
+    monkeypatch.setattr(
+        document_parser,
+        "remove_docx_headers_footers",
+        fake_remove_docx_headers_footers,
+    )
     monkeypatch.setattr(
         document_parser,
         "convert_docx_to_pdf",
@@ -181,6 +195,7 @@ def test_docx_parsing_saves_converted_pdf_then_json(tmp_path, monkeypatch):
     assert artifacts.pdf_path == artifacts.directory / "document.pdf"
     assert artifacts.pdf_path.read_bytes() == b"%PDF-1.4\n%%EOF\n"
     assert artifacts.json_path.is_file()
+    assert cleaned_inputs == [artifacts.directory / "document.no-header-footer.docx"]
     assert converted_inputs == [artifacts.pdf_path]
 
 
@@ -192,9 +207,17 @@ def test_docx_parsing_can_use_pymupdf4llm_engine_after_pdf_conversion(
     source_path.write_bytes(b"docx")
     settings = make_settings(tmp_path, docx_parser_engine="pymupdf4llm")
     parsed_inputs = []
+    cleaned_inputs = []
+
+    def fake_remove_docx_headers_footers(input_path: Path, output_path: Path):
+        assert input_path == source_path
+        assert output_path == settings.parsing_root / "file-uuid" / "document.no-header-footer.docx"
+        output_path.write_bytes(b"clean docx")
+        cleaned_inputs.append(output_path)
+        return output_path
 
     def fake_convert_docx_to_pdf(input_path: Path, output_path: Path):
-        assert input_path == source_path
+        assert input_path == settings.parsing_root / "file-uuid" / "document.no-header-footer.docx"
         output_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
         return output_path
 
@@ -209,6 +232,11 @@ def test_docx_parsing_can_use_pymupdf4llm_engine_after_pdf_conversion(
             "texts": [{"self_ref": "#/texts/0", "text": "合同"}],
         }
 
+    monkeypatch.setattr(
+        document_parser,
+        "remove_docx_headers_footers",
+        fake_remove_docx_headers_footers,
+    )
     monkeypatch.setattr(
         document_parser,
         "convert_docx_to_pdf",
@@ -231,6 +259,7 @@ def test_docx_parsing_can_use_pymupdf4llm_engine_after_pdf_conversion(
     payload = artifacts.json_path.read_text(encoding="utf-8")
     assert artifacts.pdf_path == artifacts.directory / "document.pdf"
     assert artifacts.pdf_path.read_bytes() == b"%PDF-1.4\n%%EOF\n"
+    assert cleaned_inputs == [artifacts.directory / "document.no-header-footer.docx"]
     assert parsed_inputs == [artifacts.pdf_path]
     assert '"schema_name": "PyMuPDF4LLMContractDocument"' in payload
 
@@ -272,6 +301,30 @@ def test_docx_parsing_can_use_python_docx_engine(tmp_path, monkeypatch):
     payload = artifacts.json_path.read_text(encoding="utf-8")
     assert artifacts.pdf_path is None
     assert '"schema_name": "PythonDocxContractDocument"' in payload
+
+
+def test_remove_docx_headers_footers_preserves_body_and_clears_story_parts(tmp_path):
+    input_path = tmp_path / "source.docx"
+    output_path = tmp_path / "clean.docx"
+
+    document = Document()
+    section = document.sections[0]
+    section.header.paragraphs[0].text = "页眉内容"
+    section.footer.paragraphs[0].text = "页脚内容"
+    section.header.add_table(rows=1, cols=1, width=1).cell(0, 0).text = "页眉表格"
+    document.add_paragraph("正文内容")
+    document.save(input_path)
+
+    result_path = document_parser.remove_docx_headers_footers(input_path, output_path)
+
+    cleaned = Document(result_path)
+    cleaned_section = cleaned.sections[0]
+
+    assert result_path == output_path
+    assert [paragraph.text for paragraph in cleaned.paragraphs] == ["正文内容"]
+    assert [paragraph.text for paragraph in cleaned_section.header.paragraphs] == [""]
+    assert [paragraph.text for paragraph in cleaned_section.footer.paragraphs] == [""]
+    assert cleaned_section.header.tables == []
 
 
 def test_docx_parsing_rejects_unknown_docx_engine(tmp_path):

@@ -17,6 +17,7 @@ from src.config import Settings
 SUPPORTED_EXTENSIONS = {".docx", ".pdf"}
 PARSED_JSON_FILENAME = "document.json"
 CONVERTED_PDF_FILENAME = "document.pdf"
+CLEANED_DOCX_FILENAME = "document.no-header-footer.docx"
 _LOGGER = logging.getLogger(__name__)
 _TORCHVISION_NMS_LIB: Any | None = None
 _DOCUMENT_CONVERTER: Any | None = None
@@ -78,6 +79,11 @@ def parse_uploaded_document(
         if extension == ".docx" and docx_parser_engine in {"docling", "pymupdf4llm"}
         else None
     )
+    cleaned_docx_path = (
+        parsing_dir / CLEANED_DOCX_FILENAME
+        if extension == ".docx" and docx_parser_engine in {"docling", "pymupdf4llm"}
+        else None
+    )
 
     try:
         parsing_dir.mkdir(parents=True, exist_ok=True)
@@ -90,7 +96,13 @@ def parse_uploaded_document(
         else:
             if pdf_path is not None:
                 try:
-                    conversion_input_path = convert_docx_to_pdf(source_path, pdf_path)
+                    if cleaned_docx_path is None:
+                        raise RuntimeError("cleaned DOCX path was not initialized")
+                    conversion_input_path = remove_docx_headers_footers(
+                        source_path,
+                        cleaned_docx_path,
+                    )
+                    conversion_input_path = convert_docx_to_pdf(conversion_input_path, pdf_path)
                 except Exception as exc:
                     raise ParsingError("DOCUMENT_CONVERSION_ERROR", status_code=500) from exc
 
@@ -266,6 +278,39 @@ def convert_docx_to_pdf(input_path: Path, output_path: Path) -> Path:
         shutil.move(str(generated_pdf), output_path)
 
     return output_path
+
+
+def remove_docx_headers_footers(input_path: Path, output_path: Path) -> Path:
+    from docx import Document
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    document = Document(input_path)
+
+    for section in document.sections:
+        parts = [
+            section.header,
+            section.first_page_header,
+            section.even_page_header,
+            section.footer,
+            section.first_page_footer,
+            section.even_page_footer,
+        ]
+
+        for part in parts:
+            part.is_linked_to_previous = False
+            clear_docx_story_part(part)
+
+    document.save(output_path)
+    return output_path
+
+
+def clear_docx_story_part(story_part: Any) -> None:
+    element = story_part._element
+
+    for child in list(element):
+        element.remove(child)
+
+    story_part.add_paragraph()
 
 
 def convert_to_json_data(input_path: Path) -> dict[str, Any]:
