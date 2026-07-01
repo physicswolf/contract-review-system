@@ -32,7 +32,7 @@ export async function listTypes(params = {}) {
 }
 
 export async function getType(id) {
-  if (USE_MOCK) return delay(contractTypes.find((t) => t.id === id) || null)
+  if (USE_MOCK) return delay(contractTypes.find((t) => String(t.id) === String(id)) || null)
   const { data } = await http.get(`/contract-types/${id}`)
   return adaptType(data.data)
 }
@@ -40,7 +40,7 @@ export async function getType(id) {
 export async function saveType(payload) {
   if (USE_MOCK) {
     if (payload.id) {
-      const t = contractTypes.find((x) => x.id === payload.id)
+      const t = contractTypes.find((x) => String(x.id) === String(payload.id))
       if (t) Object.assign(t, payload)
       return delay(t)
     }
@@ -72,7 +72,7 @@ export async function saveType(payload) {
 
 export async function deleteType(id) {
   if (USE_MOCK) {
-    const i = contractTypes.findIndex((t) => t.id === id)
+    const i = contractTypes.findIndex((t) => String(t.id) === String(id))
     if (i > -1) contractTypes.splice(i, 1)
     return delay({ ok: true })
   }
@@ -81,7 +81,14 @@ export async function deleteType(id) {
 }
 
 export async function saveAuditPoints(typeId, auditPointIds) {
-  if (USE_MOCK) return delay({ ok: true })
+  if (USE_MOCK) {
+    const target = contractTypes.find((t) => String(t.id) === String(typeId))
+    if (target) {
+      target.relatedPoints = auditPointIds.length
+      target.linkedAuditPoints = auditPointIds.map((id) => ({ auditPointId: id, enabled: 1 }))
+    }
+    return delay({ ok: true })
+  }
   const { data } = await http.put(`/contract-types/${typeId}/audit-points`, { auditPointIds })
   return data
 }

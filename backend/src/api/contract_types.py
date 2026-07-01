@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from src.api.responses import ERR_CONFLICT, ERR_NOTFOUND, ERR_PARAM, ERR_SERVER, tmp_error, tmp_ok
+from src.services.audit_point_store import audit_point_repository
 from src.services.contract_type_store import contract_type_repository
 
 
@@ -22,6 +24,51 @@ async def list_contract_types(
     except RuntimeError:
         return tmp_error(500, ERR_SERVER, "合同类型列表读取失败")
     return tmp_ok(records)
+
+
+@router.get("/{type_id}/audit-points/description")
+async def get_audit_point_descriptions(
+    type_id: int,
+    dimId: int | None = Query(default=None),
+) -> JSONResponse:
+    try:
+        contract_type = contract_type_repository.find_by_id_tmp(type_id)
+    except RuntimeError:
+        return tmp_error(500, ERR_SERVER, "合同类型读取失败")
+
+    if contract_type is None or not contract_type.get("enabled"):
+        return tmp_error(404, ERR_NOTFOUND, "合同类型不存在或已停用")
+
+    try:
+        rows = audit_point_repository.find_descriptions_by_contract_type(type_id, dim_id=dimId)
+    except RuntimeError:
+        return tmp_error(500, ERR_SERVER, "审查点说明读取失败")
+
+    dimensions: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        dim_id = int(row["dim_id"])
+        if dim_id not in dimensions:
+            dimensions[dim_id] = {
+                "dimId": dim_id,
+                "dimName": row.get("dim_name") or "",
+                "auditPoints": [],
+            }
+        dimensions[dim_id]["auditPoints"].append(
+            {
+                "id": int(row["id"]),
+                "name": row.get("name") or "",
+                "description": row.get("description") or "",
+                "instruction": row.get("instruction") or "",
+                "riskPoints": _json_value(row.get("risk_points"), []),
+            }
+        )
+
+    return tmp_ok(
+        {
+            "contractType": {"id": int(contract_type["id"]), "name": contract_type.get("name") or ""},
+            "dimensions": list(dimensions.values()),
+        }
+    )
 
 
 @router.get("/{type_id}")
@@ -102,3 +149,14 @@ async def toggle_contract_type_audit_point(
     except RuntimeError:
         return tmp_error(500, ERR_SERVER, "合同类型审查点状态更新失败")
     return tmp_ok()
+
+
+def _json_value(value: Any, fallback: Any) -> Any:
+    if value is None:
+        return fallback
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        return json.loads(str(value))
+    except json.JSONDecodeError:
+        return fallback
