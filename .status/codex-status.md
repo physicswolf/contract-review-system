@@ -501,3 +501,16 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_document_parser.py` 通过，`12 passed`
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`64 passed`
   - `git diff --check` 通过
+
+---
+
+## 2026-07-02 02:54:36 CST — LibreOffice PDF 转换禁用书签
+
+- **依据**：用户要求 LibreOffice 转 PDF 时不要生成导航栏书签
+- **实现动作**：更新 `backend/src/services/document_parser.py`，将 `--convert-to pdf` 改为 `pdf:writer_pdf_Export` 并传入 `ExportBookmarks=false`；同时设置 `InitialView=0`，避免 PDF 默认以书签导航视图打开
+- **测试动作**：更新 `backend/tests/test_document_parser.py`，新增 LibreOffice 转换命令断言，确认导出过滤器包含禁用书签配置
+- **验证**：
+  - `python3 -m py_compile backend/src/services/document_parser.py backend/tests/test_document_parser.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_document_parser.py` 通过，`13 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`65 passed`
+  - `git diff --check` 通过

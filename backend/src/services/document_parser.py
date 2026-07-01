@@ -18,6 +18,10 @@ SUPPORTED_EXTENSIONS = {".docx", ".pdf"}
 PARSED_JSON_FILENAME = "document.json"
 CONVERTED_PDF_FILENAME = "document.pdf"
 CLEANED_DOCX_FILENAME = "document.no-header-footer.docx"
+LIBREOFFICE_PDF_EXPORT_OPTIONS = {
+    "ExportBookmarks": {"type": "boolean", "value": "false"},
+    "InitialView": {"type": "long", "value": "0"},
+}
 _LOGGER = logging.getLogger(__name__)
 _TORCHVISION_NMS_LIB: Any | None = None
 _DOCUMENT_CONVERTER: Any | None = None
@@ -261,7 +265,7 @@ def convert_docx_to_pdf(input_path: Path, output_path: Path) -> Path:
             f"-env:UserInstallation={profile_dir.as_uri()}",
             "--headless",
             "--convert-to",
-            "pdf",
+            libreoffice_pdf_export_filter(),
             "--outdir",
             str(out_dir),
             str(input_path),
@@ -278,6 +282,11 @@ def convert_docx_to_pdf(input_path: Path, output_path: Path) -> Path:
         shutil.move(str(generated_pdf), output_path)
 
     return output_path
+
+
+def libreoffice_pdf_export_filter() -> str:
+    options = json.dumps(LIBREOFFICE_PDF_EXPORT_OPTIONS, separators=(",", ":"))
+    return f"pdf:writer_pdf_Export:{options}"
 
 
 def remove_docx_headers_footers(input_path: Path, output_path: Path) -> Path:

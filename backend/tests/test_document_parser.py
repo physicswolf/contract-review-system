@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from docx import Document
@@ -143,6 +145,39 @@ def test_pdf_parsing_rejects_unknown_pdf_engine(tmp_path):
         )
 
     assert exc_info.value.code == "UNSUPPORTED_PDF_PARSER_ENGINE"
+
+
+def test_docx_to_pdf_disables_libreoffice_bookmark_export(tmp_path, monkeypatch):
+    input_path = tmp_path / "source.docx"
+    output_path = tmp_path / "output.pdf"
+    input_path.write_bytes(b"docx")
+    commands = []
+
+    def fake_run(command, text, capture_output, check):
+        commands.append(command)
+        out_dir = Path(command[command.index("--outdir") + 1])
+        source = Path(command[-1])
+        (out_dir / f"{source.stem}.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        document_parser,
+        "find_libreoffice_executable",
+        lambda: "/usr/bin/libreoffice",
+    )
+    monkeypatch.setattr(document_parser.subprocess, "run", fake_run)
+
+    result_path = document_parser.convert_docx_to_pdf(input_path, output_path)
+
+    filter_arg = commands[0][commands[0].index("--convert-to") + 1]
+    prefix = "pdf:writer_pdf_Export:"
+    options = json.loads(filter_arg.removeprefix(prefix))
+
+    assert result_path == output_path
+    assert output_path.read_bytes() == b"%PDF-1.4\n%%EOF\n"
+    assert filter_arg.startswith(prefix)
+    assert options["ExportBookmarks"] == {"type": "boolean", "value": "false"}
+    assert options["InitialView"] == {"type": "long", "value": "0"}
 
 
 def test_docx_parsing_saves_converted_pdf_then_json(tmp_path, monkeypatch):
