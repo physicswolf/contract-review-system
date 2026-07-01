@@ -123,8 +123,13 @@
     </section>
 
     <div class="actions">
-      <el-button @click="router.push({ name: 'config' })">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      <div class="actions-left">
+        <el-button v-if="!isNew" type="danger" plain @click="deletePoint">删除该审查点</el-button>
+      </div>
+      <div class="actions-right">
+        <el-button @click="router.push({ name: 'config' })">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -132,10 +137,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import AppTopbar from '../../components/AppTopbar.vue'
-import { getPoint, savePoint, listDimensions } from '../../services/point.service'
+import { deletePoint as deletePointApi, getPoint, savePoint, listDimensions } from '../../services/point.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -257,6 +262,17 @@ async function save() {
     saving.value = false
   }
 }
+
+async function deletePoint() {
+  await ElMessageBox.confirm(
+    `确认删除审查点「${form.name}」？删除后可在数据库中恢复。`,
+    '提示',
+    { type: 'warning' },
+  )
+  await deletePointApi(form.id)
+  ElMessage.success('已删除')
+  router.push({ name: 'config' })
+}
 </script>
 
 <style scoped>
@@ -331,8 +347,15 @@ async function save() {
 }
 .actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding-bottom: 30px;
+}
+.actions-left,
+.actions-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

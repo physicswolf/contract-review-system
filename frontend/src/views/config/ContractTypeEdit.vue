@@ -61,8 +61,13 @@
         </section>
 
         <div class="actions">
-          <el-button @click="backToTypes">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+          <div class="actions-left">
+            <el-button v-if="!isNew" type="danger" plain @click="deleteType">删除该合同类型</el-button>
+          </div>
+          <div class="actions-right">
+            <el-button @click="backToTypes">取消</el-button>
+            <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+          </div>
         </div>
       </main>
     </div>
@@ -72,9 +77,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AppTopbar from '../../components/AppTopbar.vue'
-import { getType, listTypes, saveType } from '../../services/type.service'
+import { deleteType as deleteTypeApi, getType, listTypes, saveType } from '../../services/type.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -167,6 +172,17 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+async function deleteType() {
+  await ElMessageBox.confirm(
+    `确认删除合同类型「${form.name}」？删除后可在数据库中恢复。`,
+    '提示',
+    { type: 'warning' },
+  )
+  await deleteTypeApi(form.id)
+  ElMessage.success('已删除')
+  backToTypes()
 }
 
 function backToTypes() {
@@ -301,8 +317,15 @@ function backToTypes() {
 }
 .actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding-bottom: 30px;
+}
+.actions-left,
+.actions-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

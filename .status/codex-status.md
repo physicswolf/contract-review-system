@@ -316,7 +316,14 @@
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `frontend/dist`
 
----
+## 2026-07-02 00:10:44 CST — 删除按钮位置调整
+
+- **依据**：用户要求删除按钮均放在页面左端，不要放在确认按钮附近，避免误点
+- **动作**：调整 `PointEdit.vue` 与 `ContractTypeEdit.vue` 底部操作栏结构，删除按钮放入左侧分组，取消/保存按钮保留在右侧分组
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
 
 ## 2026-07-01 13:45:56 CST — 合同类型数据库灌数
 
@@ -428,3 +435,55 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`63 passed`
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `backend/.pytest_cache` 和相关 `__pycache__`
+
+---
+
+## 2026-07-01 23:58:56 CST — 审查点与合同类型删除按钮开发启动
+
+- **依据**：读取最新 `docs/planning/删除功能计划书.md` 与 `docs/develop/删除功能设计说明书.md`
+- **范围确认**：后端删除接口和软删除逻辑已存在；本轮仅在 `PointEdit.vue` 与 `ContractTypeEdit.vue` 编辑模式增加删除按钮、确认弹窗和删除后返回列表
+- **约束处理**：不改后端、不改 mock 数据；沿用现有 `deletePoint`、`deleteType` service
+
+### 开发完成记录
+
+- **审查点页面**：`frontend/src/views/config/PointEdit.vue` 底部操作区在编辑模式显示“删除该审查点”，确认后调用 `deletePointApi(form.id)`，成功提示并返回审核点配置页
+- **合同类型页面**：`frontend/src/views/config/ContractTypeEdit.vue` 底部操作区在编辑模式显示“删除该合同类型”，确认后调用 `deleteTypeApi(form.id)`，成功提示并返回合同类型列表 tab
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 01:05:16 CST — aizhiqi_dev 数据库创建与灌数
+
+- **目标库**：`192.168.1.155:3306/aizhiqi_dev`
+- **执行动作**：先通过后端仓储初始化逻辑创建 `aizhiqi_dev` 数据库和 `contracts` 表，再执行 `run_migrations()` 创建全部迁移表并写入种子数据
+- **沙箱处理**：首次直连 MySQL 被本地沙箱网络限制拦截；经授权提升后执行成功
+- **执行结果**：迁移命令返回 `migrations-ok`
+- **验证表清单**：`audit_dimension_stat`、`audit_point`、`audit_result_item`、`audit_task`、`contract_type`、`contract_type_audit_point`、`contracts`、`dimension`、`schema_migrations`、`user`
+- **迁移记录**：共 9 条，包含 `001_create_auth_tables.sql` 至 `009_seed_tmp_config_data.sql`
+- **数据量验证**：
+  - `user=1`
+  - `contracts=0`
+  - `dimension=5`
+  - `audit_point=18`
+  - `contract_type=6`
+  - `contract_type_audit_point=33`
+  - `audit_task=0`
+  - `audit_result_item=0`
+  - `audit_dimension_stat=0`
+- **种子数据验证**：
+  - 维度：基础核查、法务风险、财务风险、形式核查、一致性检查
+  - 合同类型：采购合同、服务合同、销售合同、租赁合同、合作协议、补充协议
+- **说明**：业务运行数据表如 `contracts`、`audit_task`、`audit_result_item`、`audit_dimension_stat` 当前为空，属于新库初始化后的预期状态
+
+---
+
+## 2026-07-02 01:10:57 CST — aizhiqi_dev demo 用户创建
+
+- **目标库**：`192.168.1.155:3306/aizhiqi_dev`
+- **动作**：读取 `yilu@company.com` 的公司、角色、手机号和启用状态，向 `user` 表写入 `demo@company.com`
+- **密码**：`12345678` 已按项目登录逻辑写入 bcrypt hash
+- **结果**：`demo@company.com` 创建成功，`id=2`，角色为 `企业管理员`，状态为启用
+- **验证**：使用 `verify_password("12345678", password_hash)` 校验通过
