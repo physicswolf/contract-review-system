@@ -184,6 +184,57 @@ def test_docx_parsing_saves_converted_pdf_then_json(tmp_path, monkeypatch):
     assert converted_inputs == [artifacts.pdf_path]
 
 
+def test_docx_parsing_can_use_pymupdf4llm_engine_after_pdf_conversion(
+    tmp_path,
+    monkeypatch,
+):
+    source_path = tmp_path / "source.docx"
+    source_path.write_bytes(b"docx")
+    settings = make_settings(tmp_path, docx_parser_engine="pymupdf4llm")
+    parsed_inputs = []
+
+    def fake_convert_docx_to_pdf(input_path: Path, output_path: Path):
+        assert input_path == source_path
+        output_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+        return output_path
+
+    def fail_convert_to_json_data(input_path: Path):
+        raise AssertionError("pymupdf4llm DOCX engine should not use Docling")
+
+    def fake_convert_pdf_to_pymupdf4llm_json_data(input_path: Path, file_id: str):
+        parsed_inputs.append(input_path)
+        assert file_id == "file-uuid"
+        return {
+            "schema_name": "PyMuPDF4LLMContractDocument",
+            "texts": [{"self_ref": "#/texts/0", "text": "合同"}],
+        }
+
+    monkeypatch.setattr(
+        document_parser,
+        "convert_docx_to_pdf",
+        fake_convert_docx_to_pdf,
+    )
+    monkeypatch.setattr(document_parser, "convert_to_json_data", fail_convert_to_json_data)
+    monkeypatch.setattr(
+        document_parser,
+        "convert_pdf_to_pymupdf4llm_json_data",
+        fake_convert_pdf_to_pymupdf4llm_json_data,
+    )
+
+    artifacts = document_parser.parse_uploaded_document(
+        source_path,
+        "file-uuid",
+        ".docx",
+        settings,
+    )
+
+    payload = artifacts.json_path.read_text(encoding="utf-8")
+    assert artifacts.pdf_path == artifacts.directory / "document.pdf"
+    assert artifacts.pdf_path.read_bytes() == b"%PDF-1.4\n%%EOF\n"
+    assert parsed_inputs == [artifacts.pdf_path]
+    assert '"schema_name": "PyMuPDF4LLMContractDocument"' in payload
+
+
 def test_docx_parsing_can_use_python_docx_engine(tmp_path, monkeypatch):
     source_path = tmp_path / "source.docx"
     source_path.write_bytes(b"docx")

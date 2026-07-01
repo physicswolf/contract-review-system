@@ -25,7 +25,7 @@ _DOCUMENT_CONVERTER_WARMUP_STARTED = False
 
 ERROR_MESSAGES = {
     "UNSUPPORTED_PARSE_TYPE": "仅支持 .docx、.pdf 文件解析",
-    "UNSUPPORTED_DOCX_PARSER_ENGINE": "DOCX_PARSER_ENGINE 仅支持 docling 或 python-docx",
+    "UNSUPPORTED_DOCX_PARSER_ENGINE": "DOCX_PARSER_ENGINE 仅支持 docling、python-docx 或 pymupdf4llm",
     "UNSUPPORTED_PDF_PARSER_ENGINE": "PDF_PARSER_ENGINE 仅支持 docling 或 pymupdf4llm",
     "DOCUMENT_CONVERSION_ERROR": "Word 文件转换 PDF 失败，请检查 LibreOffice 环境",
     "DOCUMENT_PARSING_ERROR": "文档解析失败，请确认文件为纯文字版 PDF 或 DOCX",
@@ -75,7 +75,7 @@ def parse_uploaded_document(
     )
     pdf_path = (
         parsing_dir / CONVERTED_PDF_FILENAME
-        if extension == ".docx" and docx_parser_engine == "docling"
+        if extension == ".docx" and docx_parser_engine in {"docling", "pymupdf4llm"}
         else None
     )
 
@@ -97,6 +97,11 @@ def parse_uploaded_document(
             try:
                 if extension == ".pdf" and pdf_parser_engine == "pymupdf4llm":
                     json_data = convert_pdf_to_pymupdf4llm_json_data(source_path, file_id)
+                elif extension == ".docx" and docx_parser_engine == "pymupdf4llm":
+                    json_data = convert_pdf_to_pymupdf4llm_json_data(
+                        conversion_input_path,
+                        file_id,
+                    )
                 else:
                     json_data = convert_to_json_data(conversion_input_path)
                     if extension == ".pdf":
@@ -297,7 +302,7 @@ def add_docling_pdf_contract_structure(
 
 def normalize_docx_parser_engine(value: str) -> str:
     normalized = value.strip().lower().replace("_", "-")
-    if normalized not in {"docling", "python-docx"}:
+    if normalized not in {"docling", "python-docx", "pymupdf4llm"}:
         raise ParsingError("UNSUPPORTED_DOCX_PARSER_ENGINE", status_code=500)
     return normalized
 

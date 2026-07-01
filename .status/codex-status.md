@@ -408,3 +408,23 @@
   - `npm run build` 通过；仅出现既有 Vite/Rollup chunk size 与依赖注释提示
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `frontend/dist`、`backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`
+
+---
+
+## 2026-07-01 22:05:32 CST — DOCX 增加 pymupdf4llm 解析选项开发启动
+
+- **依据**：读取最新 `docs/planning/DOCX解析增加pymupdf4llm选项计划书.md` 与 `docs/develop/DOCX解析增加pymupdf4llm选项设计说明书.md`
+- **范围确认**：新增 `DOCX_PARSER_ENGINE=pymupdf4llm` 路由，流程为 DOCX 经 LibreOffice 转 PDF 后交给已有 pymupdf4llm PDF 解析函数
+- **约束处理**：计划明确要求修改解析路由；本轮只做新增可选分支和对应测试，不调整既有 docling/python-docx/PDF 解析行为
+
+### 开发完成记录
+
+- **实现动作**：更新 `backend/src/services/document_parser.py`，允许 `DOCX_PARSER_ENGINE=pymupdf4llm`，该模式下保存转换后的 `document.pdf` 并调用 `convert_pdf_to_pymupdf4llm_json_data(conversion_input_path, file_id)`
+- **兼容动作**：保留 `.docx + docling`、`.docx + python-docx`、`.pdf + docling`、`.pdf + pymupdf4llm` 原有分支；未知 DOCX 引擎错误提示同步加入 `pymupdf4llm`
+- **测试动作**：新增 `test_docx_parsing_can_use_pymupdf4llm_engine_after_pdf_conversion`，验证 DOCX 先转 PDF，且 pymupdf4llm 解析函数收到的是转换后的 PDF 路径
+- **验证**：
+  - `python3 -m py_compile backend/src/services/document_parser.py backend/tests/test_document_parser.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_document_parser.py` 通过，`11 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`63 passed`
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `backend/.pytest_cache` 和相关 `__pycache__`
