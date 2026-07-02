@@ -507,6 +507,7 @@ function formatPage(pageNo) {
 <style scoped>
 .page {
   flex: 1;
+  height: calc(100vh - 68px);
   min-height: 0;
   padding: 20px 28px 28px;
   overflow: hidden;
@@ -539,6 +540,7 @@ function formatPage(pageNo) {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(440px, 1.1fr);
   gap: 16px;
+  overflow: hidden;
 }
 .tree-pane,
 .detail-pane {
@@ -574,6 +576,7 @@ function formatPage(pageNo) {
 .tree-scroll,
 .detail-scroll {
   flex: 1;
+  height: 100%;
   min-height: 0;
 }
 .tree-scroll {

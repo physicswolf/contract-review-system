@@ -21,6 +21,7 @@ from src.services.structure_editor import (
     StructureEditorError,
     StructureValidationError,
     document_exists,
+    load_editor_structure,
     load_document_json,
     save_contract_structure,
 )
@@ -41,6 +42,7 @@ async def get_document(file_id: str) -> dict | JSONResponse:
 
     try:
         document = load_document_json(file_id, settings)
+        structure, warnings = load_editor_structure(file_id, settings, document)
     except FileNotFoundError:
         return error_response(
             404,
@@ -50,8 +52,6 @@ async def get_document(file_id: str) -> dict | JSONResponse:
     except (OSError, json.JSONDecodeError):
         return error_response(500, "INTERNAL_ERROR", "文档读取失败，请稍后重试")
 
-    structure = document.get("contract_structure")
-    warnings = document.get("warnings")
     origin = document.get("origin")
     children = structure.get("children") if isinstance(structure, dict) else None
 
@@ -62,7 +62,7 @@ async def get_document(file_id: str) -> dict | JSONResponse:
             origin=origin if isinstance(origin, dict) else {},
             has_structure=isinstance(structure, dict),
             chapter_count=len(children) if isinstance(children, list) else 0,
-            warning_count=len(warnings) if isinstance(warnings, list) else 0,
+            warning_count=len(warnings),
         )
     ).model_dump()
 
@@ -72,6 +72,7 @@ async def get_document_structure(file_id: str) -> dict | JSONResponse:
     settings = get_settings()
     try:
         document = load_document_json(file_id, settings)
+        structure, _warnings = load_editor_structure(file_id, settings, document)
     except FileNotFoundError:
         return error_response(
             404,
@@ -81,12 +82,11 @@ async def get_document_structure(file_id: str) -> dict | JSONResponse:
     except (OSError, json.JSONDecodeError):
         return error_response(500, "INTERNAL_ERROR", "文档读取失败，请稍后重试")
 
-    structure = document.get("contract_structure")
     if not isinstance(structure, dict):
         return error_response(
             422,
             "STRUCTURE_VALIDATION_ERROR",
-            "文档缺少 contract_structure",
+            "文档缺少可编辑结构",
         )
 
     return StructureData(

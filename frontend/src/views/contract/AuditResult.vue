@@ -170,12 +170,13 @@ function onExport() {
 <style scoped>
 .result {
   flex: 1;
+  height: calc(100vh - 68px);
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   padding: 20px;
   overflow: hidden;
-  min-height: 0;
 }
 .pane {
   background: #fff;
@@ -187,6 +188,7 @@ function onExport() {
   overflow: hidden;
 }
 .pane-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -207,6 +209,8 @@ function onExport() {
   letter-spacing: 0.5px;
 }
 .doc {
+  flex: 1;
+  min-height: 0;
   padding: 22px 26px;
   overflow: auto;
   line-height: 1.95;
@@ -233,10 +237,12 @@ function onExport() {
   overflow: hidden;
 }
 .dim-tabs {
+  flex-shrink: 0;
   display: flex;
   gap: 22px;
   padding: 0 20px;
   border-bottom: 0.667px solid var(--line);
+  overflow-x: auto;
 }
 .dim-tab {
   border: 0;
@@ -254,6 +260,7 @@ function onExport() {
   border-bottom-color: var(--blue);
 }
 .level-pills {
+  flex-shrink: 0;
   display: flex;
   gap: 10px;
   padding: 14px 20px 6px;
@@ -282,6 +289,8 @@ function onExport() {
   border-color: var(--amber);
 }
 .cards {
+  flex: 1;
+  min-height: 0;
   padding: 8px 20px 18px;
   overflow: auto;
 }

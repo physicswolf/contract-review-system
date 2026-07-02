@@ -402,8 +402,17 @@ def _original_text_for_contract(
     contract: dict[str, Any],
     highlights: list[str],
 ) -> list[dict[str, str]]:
+    file_id = str(contract.get("file_id") or "")
     try:
-        document = load_document_json(str(contract["file_id"]), get_settings())
+        data = _load_blocks_json(file_id)
+        blocks = _original_text_from_blocks(data.get("blocks"), highlights)
+        if blocks:
+            return blocks
+    except Exception:
+        pass
+
+    try:
+        document = load_document_json(file_id, get_settings())
     except Exception:
         return _fallback_original_text(contract)
 
@@ -417,6 +426,49 @@ def _original_text_for_contract(
         blocks.append({"type": "h2", "text": title})
     _append_structure_blocks(structure, blocks, highlights)
     return blocks or _fallback_original_text(contract)
+
+
+def _load_blocks_json(file_id: str) -> dict[str, Any]:
+    settings = get_settings()
+    path = settings.parsing_root / file_id / "blocks.json"
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _original_text_from_blocks(
+    raw_blocks: Any,
+    highlights: list[str],
+) -> list[dict[str, str]]:
+    if not isinstance(raw_blocks, list):
+        return []
+
+    blocks: list[dict[str, str]] = []
+    for block in raw_blocks:
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "").strip()
+        if not text:
+            continue
+
+        rank = _block_rank(block.get("rank"))
+        if rank is not None and rank <= 5:
+            block_type = "h2"
+        elif rank is not None and rank <= 15:
+            block_type = "h3"
+        else:
+            block_type = _text_type(text, highlights)
+        blocks.append({"type": block_type, "text": text})
+    return blocks
+
+
+def _block_rank(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _append_structure_blocks(

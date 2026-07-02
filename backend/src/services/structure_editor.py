@@ -5,9 +5,15 @@ from pathlib import Path
 from typing import Any
 
 from src.config import Settings
+from src.services.contract_structure_parser import (
+    StandardLine,
+    parse_contract_structure_from_lines,
+)
 
 
 DOCUMENT_JSON_FILENAME = "document.json"
+BLOCKS_JSON_FILENAME = "blocks.json"
+EDITOR_STRUCTURE_META_KEY = "contract_structure_editor"
 
 ERROR_MESSAGES = {
     "DOCUMENT_NOT_FOUND": "文档不存在或尚未解析完成",
@@ -52,6 +58,81 @@ def load_document_json(file_id: str, settings: Settings) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_blocks_json(file_id: str, settings: Settings) -> dict[str, Any]:
+    """Load the parsed blocks JSON."""
+    path = _blocks_json_path(file_id, settings)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_editor_structure(
+    file_id: str,
+    settings: Settings,
+    document: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Prefer blocks.json for the editable structure, falling back to document.json."""
+    if document is None:
+        document = load_document_json(file_id, settings)
+
+    if _has_saved_editor_structure(document):
+        return _structure_from_document(document)
+
+    try:
+        structure, warnings = build_structure_from_blocks(load_blocks_json(file_id, settings))
+        if structure is not None:
+            return structure, warnings
+    except FileNotFoundError:
+        pass
+
+    return _structure_from_document(document)
+
+
+def _structure_from_document(
+    document: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    structure = document.get("contract_structure")
+    warnings = document.get("warnings")
+    return (
+        structure if isinstance(structure, dict) else None,
+        warnings if isinstance(warnings, list) else [],
+    )
+
+
+def build_structure_from_blocks(
+    blocks_data: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    raw_blocks = blocks_data.get("blocks")
+    if not isinstance(raw_blocks, list):
+        return None, []
+
+    lines = []
+    for index, block in enumerate(raw_blocks):
+        if not isinstance(block, dict):
+            continue
+
+        text = str(block.get("text") or "").strip()
+        if not text:
+            continue
+
+        lines.append(
+            StandardLine(
+                text=text,
+                source_ref=f"#/blocks/{index}",
+                page_no=_int_or_none(block.get("page")),
+                line_index=_int_or_none(block.get("no")),
+                source="blocks",
+                bbox=_block_bbox_tuple(block.get("bbox")),
+            )
+        )
+
+    if not lines:
+        return None, []
+
+    return parse_contract_structure_from_lines(lines)
+
+
 def save_contract_structure(
     file_id: str,
     updated_structure: dict[str, Any],
@@ -65,6 +146,7 @@ def save_contract_structure(
     _validate_structure_tree(updated_structure)
     document = load_document_json(file_id, settings)
     document["contract_structure"] = updated_structure
+    document[EDITOR_STRUCTURE_META_KEY] = {"source": "manual"}
     _write_json_atomically(path, document)
 
 
@@ -129,3 +211,57 @@ def _write_json_atomically(path: Path, data: dict[str, Any]) -> None:
 
 def _document_json_path(file_id: str, settings: Settings) -> Path:
     return settings.parsing_root / file_id / DOCUMENT_JSON_FILENAME
+
+
+def _blocks_json_path(file_id: str, settings: Settings) -> Path:
+    return settings.parsing_root / file_id / BLOCKS_JSON_FILENAME
+
+
+def _has_saved_editor_structure(document: dict[str, Any]) -> bool:
+    meta = document.get(EDITOR_STRUCTURE_META_KEY)
+    return isinstance(meta, dict) and meta.get("source") == "manual"
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _block_bbox_tuple(value: Any) -> tuple[float, float, float, float] | None:
+    if isinstance(value, dict):
+        if {"x", "y", "width", "height"} <= value.keys():
+            x = _float_or_none(value.get("x"))
+            y = _float_or_none(value.get("y"))
+            width = _float_or_none(value.get("width"))
+            height = _float_or_none(value.get("height"))
+            if x is not None and y is not None and width is not None and height is not None:
+                return (x, y, x + width, y + height)
+
+        if {"l", "t", "r", "b"} <= value.keys():
+            left = _float_or_none(value.get("l"))
+            top = _float_or_none(value.get("t"))
+            right = _float_or_none(value.get("r"))
+            bottom = _float_or_none(value.get("b"))
+            if left is not None and top is not None and right is not None and bottom is not None:
+                return (left, top, right, bottom)
+
+    if isinstance(value, (list, tuple)) and len(value) == 4:
+        coords = [_float_or_none(item) for item in value]
+        left, top, right, bottom = coords
+        if left is not None and top is not None and right is not None and bottom is not None:
+            return (left, top, right, bottom)
+
+    return None
