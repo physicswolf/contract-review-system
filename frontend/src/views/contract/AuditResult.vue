@@ -1,102 +1,106 @@
 <template>
-  <AppTopbar :title="data?.contractName || '审核结果'">
-    <template #actions>
-      <el-button @click="router.push({ name: 'contracts' })">返回列表</el-button>
-      <el-button type="primary" @click="onExport">导出审核意见</el-button>
-    </template>
-  </AppTopbar>
+  <div class="audit-result-shell">
+    <AppTopbar :title="data?.contractName || '审核结果'">
+      <template #actions>
+        <el-button @click="router.push({ name: 'contracts' })">返回列表</el-button>
+        <el-button type="primary" @click="onExport">导出审核意见</el-button>
+      </template>
+    </AppTopbar>
 
-  <div class="result" v-loading="loading">
-    <!-- 左：合同原文 -->
-    <section class="pane original">
-      <div class="pane-head">
-        <span class="doc-badge">{{ data?.docType || 'Word' }}</span>
-        <span class="pane-title">原文</span>
-      </div>
-      <div class="doc">
-        <template v-for="(b, i) in data?.originalText || []" :key="i">
-          <h2 v-if="b.type === 'h2'">{{ b.text }}</h2>
-          <h3 v-else-if="b.type === 'h3'">{{ b.text }}</h3>
-          <p v-else-if="b.type === 'highlight'" class="hl">{{ b.text }}</p>
-          <p v-else>{{ b.text }}</p>
-        </template>
-      </div>
-    </section>
-
-    <!-- 右：审查结果 -->
-    <section class="pane review">
-      <div class="pane-head">
-        <span class="pane-title">审查结果</span>
-      </div>
-
-      <div class="dim-tabs">
-        <button
-          v-for="d in dimTabs"
-          :key="d"
-          class="dim-tab"
-          :class="{ on: activeDim === d }"
-          @click="activeDim = d"
-        >
-          {{ d }}
-        </button>
-      </div>
-
-      <div class="level-pills">
-        <button class="pill" :class="{ on: levelFilter === 'all' }" @click="levelFilter = 'all'">
-          全部 ({{ total }})
-        </button>
-        <button class="pill red" :class="{ on: levelFilter === 'major' }" @click="levelFilter = 'major'">
-          重大风险 ({{ majorCount }})
-        </button>
-        <button class="pill amber" :class="{ on: levelFilter === 'general' }" @click="levelFilter = 'general'">
-          一般风险 ({{ generalCount }})
-        </button>
-      </div>
-
-      <div class="cards">
-        <section v-for="g in groups" :key="g.dimension" class="dim-group">
-          <div class="dim-group-head">
-            <span class="dim-group-name">{{ g.dimension }}</span>
-            <span class="dim-group-count">{{ g.risks.length }} 条</span>
+    <div class="audit-result-page" v-loading="loading">
+      <div class="result">
+        <!-- 左：合同原文 -->
+        <section class="pane original">
+          <div class="pane-head">
+            <span class="doc-badge">{{ data?.docType || 'Word' }}</span>
+            <span class="pane-title">原文</span>
           </div>
-
-          <div v-for="(r, i) in g.risks" :key="i" class="risk-card">
-            <div class="rc-head">
-              <span class="rc-no">风险点 {{ i + 1 }}</span>
-              <b class="rc-title">{{ r.title }}</b>
-              <RiskTag
-                :level="r.level === 'major' ? 'major' : 'general'"
-                :text="r.level === 'major' ? '重大风险' : '一般风险'"
-              />
-            </div>
-
-            <div class="rc-section">
-              <label>风险说明</label>
-              <p>{{ r.desc }}</p>
-            </div>
-            <div class="rc-section">
-              <label>风险分析</label>
-              <p>{{ r.analysis }}</p>
-            </div>
-            <div class="rc-section">
-              <label>修改示例</label>
-              <div class="example-box">{{ r.example }}</div>
-            </div>
-
-            <div class="rc-foot">
-              <span class="dim-chip">{{ r.clause }}</span>
-              <div class="rc-actions">
-                <el-button link type="primary" @click="locate(r)">
-                  <el-icon><Aim /></el-icon> 定位原文
-                </el-button>
-                <el-button link @click="ignore(r)">忽略本条</el-button>
-              </div>
-            </div>
+          <div class="doc">
+            <template v-for="(b, i) in data?.originalText || []" :key="i">
+              <h2 v-if="b.type === 'h2'">{{ b.text }}</h2>
+              <h3 v-else-if="b.type === 'h3'">{{ b.text }}</h3>
+              <p v-else-if="b.type === 'highlight'" class="hl">{{ b.text }}</p>
+              <p v-else>{{ b.text }}</p>
+            </template>
           </div>
         </section>
-        <el-empty v-if="!groups.length" description="当前筛选下没有匹配的风险点" />
+
+        <!-- 右：审查结果 -->
+        <section class="pane review">
+          <div class="pane-head">
+            <span class="pane-title">审查结果</span>
+          </div>
+
+          <div class="dim-tabs">
+            <button
+              v-for="d in dimTabs"
+              :key="d"
+              class="dim-tab"
+              :class="{ on: activeDim === d }"
+              @click="activeDim = d"
+            >
+              {{ d }}
+            </button>
+          </div>
+
+          <div class="level-pills">
+            <button class="pill" :class="{ on: levelFilter === 'all' }" @click="levelFilter = 'all'">
+              全部 ({{ total }})
+            </button>
+            <button class="pill red" :class="{ on: levelFilter === 'major' }" @click="levelFilter = 'major'">
+              重大风险 ({{ majorCount }})
+            </button>
+            <button class="pill amber" :class="{ on: levelFilter === 'general' }" @click="levelFilter = 'general'">
+              一般风险 ({{ generalCount }})
+            </button>
+          </div>
+
+          <div class="cards">
+            <section v-for="g in groups" :key="g.dimension" class="dim-group">
+              <div class="dim-group-head">
+                <span class="dim-group-name">{{ g.dimension }}</span>
+                <span class="dim-group-count">{{ g.risks.length }} 条</span>
+              </div>
+
+              <div v-for="(r, i) in g.risks" :key="i" class="risk-card">
+                <div class="rc-head">
+                  <span class="rc-no">风险点 {{ i + 1 }}</span>
+                  <b class="rc-title">{{ r.title }}</b>
+                  <RiskTag
+                    :level="r.level === 'major' ? 'major' : 'general'"
+                    :text="r.level === 'major' ? '重大风险' : '一般风险'"
+                  />
+                </div>
+
+                <div class="rc-section">
+                  <label>风险说明</label>
+                  <p>{{ r.desc }}</p>
+                </div>
+                <div class="rc-section">
+                  <label>风险分析</label>
+                  <p>{{ r.analysis }}</p>
+                </div>
+                <div class="rc-section">
+                  <label>修改示例</label>
+                  <div class="example-box">{{ r.example }}</div>
+                </div>
+
+                <div class="rc-foot">
+                  <span class="dim-chip">{{ r.clause }}</span>
+                  <div class="rc-actions">
+                    <el-button link type="primary" @click="locate(r)">
+                      <el-icon><Aim /></el-icon> 定位原文
+                    </el-button>
+                    <el-button link @click="ignore(r)">忽略本条</el-button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <el-empty v-if="!groups.length" description="当前筛选下没有匹配的风险点" />
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
@@ -168,14 +172,29 @@ function onExport() {
 </script>
 
 <style scoped>
+.audit-result-shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+.audit-result-page {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  display: flex;
+  overflow: hidden;
+}
 .result {
   flex: 1;
-  height: calc(100vh - 68px);
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  padding: 20px;
   overflow: hidden;
 }
 .pane {
@@ -184,6 +203,7 @@ function onExport() {
   border-radius: 12px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -212,7 +232,10 @@ function onExport() {
   flex: 1;
   min-height: 0;
   padding: 22px 26px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   line-height: 1.95;
   color: #2c3850;
 }
@@ -242,7 +265,7 @@ function onExport() {
   gap: 22px;
   padding: 0 20px;
   border-bottom: 0.667px solid var(--line);
-  overflow-x: auto;
+  overflow: hidden;
 }
 .dim-tab {
   border: 0;
@@ -292,7 +315,28 @@ function onExport() {
   flex: 1;
   min-height: 0;
   padding: 8px 20px 18px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.doc::-webkit-scrollbar,
+.cards::-webkit-scrollbar {
+  width: 10px;
+}
+.doc::-webkit-scrollbar-track,
+.cards::-webkit-scrollbar-track {
+  background: #f3f6fb;
+  border-radius: 10px;
+}
+.doc::-webkit-scrollbar-thumb,
+.cards::-webkit-scrollbar-thumb {
+  background: #c8d1df;
+  border-radius: 10px;
+}
+.doc::-webkit-scrollbar-thumb:hover,
+.cards::-webkit-scrollbar-thumb:hover {
+  background: #aeb9ca;
 }
 .dim-group {
   margin-bottom: 18px;

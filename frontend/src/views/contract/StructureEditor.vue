@@ -1,179 +1,181 @@
 <template>
-  <AppTopbar :title="titleText">
-    <template #actions>
-      <el-tag :type="dirty ? 'warning' : 'success'" effect="light">{{ dirty ? '未保存' : '已同步' }}</el-tag>
-      <el-button @click="backToUpload">
-        <el-icon><Back /></el-icon>
-        返回上传
-      </el-button>
-      <el-button :loading="saving" @click="saveOnly">
-        <el-icon><FolderChecked /></el-icon>
-        保存
-      </el-button>
-      <el-button type="primary" :loading="saving" @click="finishEditing">
-        <el-icon><Check /></el-icon>
-        保存并进入审核设置
-      </el-button>
-    </template>
-  </AppTopbar>
+  <div class="structure-editor-shell">
+    <AppTopbar :title="titleText">
+      <template #actions>
+        <el-tag :type="dirty ? 'warning' : 'success'" effect="light">{{ dirty ? '未保存' : '已同步' }}</el-tag>
+        <el-button @click="backToUpload">
+          <el-icon><Back /></el-icon>
+          返回上传
+        </el-button>
+        <el-button :loading="saving" @click="saveOnly">
+          <el-icon><FolderChecked /></el-icon>
+          保存
+        </el-button>
+        <el-button type="primary" :loading="saving" @click="finishEditing">
+          <el-icon><Check /></el-icon>
+          保存并进入审核设置
+        </el-button>
+      </template>
+    </AppTopbar>
 
-  <div class="page" v-loading="loading">
-    <div class="doc-head">
-      <div>
-        <h1>{{ fileName }}</h1>
-        <p>{{ schemaName }} · {{ chapterCount }} 个章节 · {{ warningCount }} 个解析告警</p>
-      </div>
-      <el-tag effect="plain">{{ fileId }}</el-tag>
-    </div>
-
-    <el-alert
-      v-if="loadError"
-      :title="loadError"
-      type="error"
-      show-icon
-      :closable="false"
-      class="top-alert"
-    />
-
-    <section v-if="structureTree" class="editor-grid">
-      <div class="tree-pane">
-        <div class="pane-head">
-          <div>
-            <h2>章节树</h2>
-            <span>{{ visibleRoots.length }} 个顶层节点</span>
-          </div>
-          <el-button size="small" @click="expandTopLevel">
-            <el-icon><Expand /></el-icon>
-            展开顶层
-          </el-button>
+    <div class="page" v-loading="loading">
+      <div class="doc-head">
+        <div>
+          <h1>{{ fileName }}</h1>
+          <p>{{ schemaName }} · {{ chapterCount }} 个章节 · {{ warningCount }} 个解析告警</p>
         </div>
-
-        <el-scrollbar class="tree-scroll">
-          <el-tree
-            ref="treeRef"
-            :data="visibleRoots"
-            node-key="node_id"
-            :props="treeProps"
-            :expand-on-click-node="false"
-            :default-expanded-keys="expandedKeys"
-            :current-node-key="selectedNodeId"
-            highlight-current
-            @node-click="selectNode"
-          >
-            <template #default="{ node, data }">
-              <div class="tree-node">
-                <span class="node-title">
-                  <small v-if="data.label">{{ data.label }}</small>
-                  {{ data.title || '未命名章节' }}
-                </span>
-                <el-tag size="small" effect="plain">{{ data.kind || 'unknown' }}</el-tag>
-                <span v-if="data.page_no !== null && data.page_no !== undefined" class="page-chip">P{{ data.page_no }}</span>
-                <el-tooltip v-if="hasWarnings(data)" content="该节点存在解析告警">
-                  <el-icon class="warn"><WarningFilled /></el-icon>
-                </el-tooltip>
-              </div>
-            </template>
-          </el-tree>
-          <el-empty v-if="!visibleRoots.length" description="暂无章节结构" />
-        </el-scrollbar>
+        <el-tag effect="plain">{{ fileId }}</el-tag>
       </div>
 
-      <div class="detail-pane">
-        <div class="pane-head">
-          <div>
-            <h2>编辑节点</h2>
-            <span>{{ selectedNode ? selectedNode.node_id : '未选择节点' }}</span>
+      <el-alert
+        v-if="loadError"
+        :title="loadError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="top-alert"
+      />
+
+      <section v-if="structureTree" class="editor-grid">
+        <div class="tree-pane">
+          <div class="pane-head">
+            <div>
+              <h2>章节树</h2>
+              <span>{{ visibleRoots.length }} 个顶层节点</span>
+            </div>
+            <el-button size="small" @click="expandTopLevel">
+              <el-icon><Expand /></el-icon>
+              展开顶层
+            </el-button>
           </div>
-          <div class="node-tools">
-            <el-button size="small" :disabled="!selectedNode" @click="addChild">
-              <el-icon><Plus /></el-icon>
-              子节点
-            </el-button>
-            <el-button size="small" :disabled="!selectedNode" @click="addSibling">
-              <el-icon><DocumentAdd /></el-icon>
-              兄弟节点
-            </el-button>
-            <el-button size="small" type="danger" plain :disabled="!selectedNode" @click="deleteSelected">
-              <el-icon><Delete /></el-icon>
-              删除
-            </el-button>
-          </div>
-        </div>
 
-        <el-scrollbar class="detail-scroll">
-          <el-empty v-if="!selectedNode" description="请在左侧选择一个章节节点" />
-
-          <template v-else>
-            <section class="panel-section">
-              <h3>基本信息</h3>
-              <div class="field-grid">
-                <label class="field">
-                  <span>编号</span>
-                  <el-input v-model="selectedNode.label" @input="markDirty" />
-                </label>
-                <label class="field wide">
-                  <span>标题</span>
-                  <el-input v-model="selectedNode.title" type="textarea" :rows="2" @input="markDirty" />
-                </label>
-                <label class="field">
-                  <span>类型</span>
-                  <el-input :model-value="selectedNode.kind || 'unknown'" disabled />
-                </label>
-                <label class="field">
-                  <span>页码</span>
-                  <el-input :model-value="formatPage(selectedNode.page_no)" disabled />
-                </label>
-                <label class="field wide">
-                  <span>source_ref</span>
-                  <el-input :model-value="selectedNode.source_ref || '无'" disabled />
-                </label>
-              </div>
-            </section>
-
-            <section class="panel-section">
-              <div class="section-head">
-                <h3>正文内容</h3>
-                <el-button size="small" @click="addParagraph">
-                  <el-icon><Plus /></el-icon>
-                  添加段落
-                </el-button>
-              </div>
-
-              <div v-if="selectedContent.length" class="paragraph-list">
-                <div v-for="(item, index) in selectedContent" :key="index" class="paragraph-row">
-                  <label class="field">
-                    <span>段落 {{ index + 1 }}</span>
-                    <el-input
-                      v-model="item.text"
-                      type="textarea"
-                      :rows="4"
-                      @input="markDirty"
-                    />
-                  </label>
-                  <el-button type="danger" plain @click="removeParagraph(index)">删除</el-button>
+          <el-scrollbar class="tree-scroll" always>
+            <el-tree
+              ref="treeRef"
+              :data="visibleRoots"
+              node-key="node_id"
+              :props="treeProps"
+              :expand-on-click-node="false"
+              :default-expanded-keys="expandedKeys"
+              :current-node-key="selectedNodeId"
+              highlight-current
+              @node-click="selectNode"
+            >
+              <template #default="{ node, data }">
+                <div class="tree-node">
+                  <span class="node-title">
+                    <small v-if="data.label">{{ data.label }}</small>
+                    {{ data.title || '未命名章节' }}
+                  </span>
+                  <el-tag size="small" effect="plain">{{ data.kind || 'unknown' }}</el-tag>
+                  <span v-if="data.page_no !== null && data.page_no !== undefined" class="page-chip">P{{ data.page_no }}</span>
+                  <el-tooltip v-if="hasWarnings(data)" content="该节点存在解析告警">
+                    <el-icon class="warn"><WarningFilled /></el-icon>
+                  </el-tooltip>
                 </div>
-              </div>
-              <el-empty v-else description="暂无直属正文段落" />
-            </section>
+              </template>
+            </el-tree>
+            <el-empty v-if="!visibleRoots.length" description="暂无章节结构" />
+          </el-scrollbar>
+        </div>
 
-            <section class="panel-section">
-              <h3>解析告警</h3>
-              <div v-if="selectedWarnings.length" class="warning-list">
-                <el-alert
-                  v-for="(warning, index) in selectedWarnings"
-                  :key="index"
-                  :title="formatWarning(warning)"
-                  type="warning"
-                  show-icon
-                  :closable="false"
-                />
-              </div>
-              <el-empty v-else description="当前节点无告警" />
-            </section>
-          </template>
-        </el-scrollbar>
-      </div>
-    </section>
+        <div class="detail-pane">
+          <div class="pane-head">
+            <div>
+              <h2>编辑节点</h2>
+              <span>{{ selectedNode ? selectedNode.node_id : '未选择节点' }}</span>
+            </div>
+            <div class="node-tools">
+              <el-button size="small" :disabled="!selectedNode" @click="addChild">
+                <el-icon><Plus /></el-icon>
+                子节点
+              </el-button>
+              <el-button size="small" :disabled="!selectedNode" @click="addSibling">
+                <el-icon><DocumentAdd /></el-icon>
+                兄弟节点
+              </el-button>
+              <el-button size="small" type="danger" plain :disabled="!selectedNode" @click="deleteSelected">
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </div>
+          </div>
+
+          <el-scrollbar class="detail-scroll" always>
+            <el-empty v-if="!selectedNode" description="请在左侧选择一个章节节点" />
+
+            <template v-else>
+              <section class="panel-section">
+                <h3>基本信息</h3>
+                <div class="field-grid">
+                  <label class="field">
+                    <span>编号</span>
+                    <el-input v-model="selectedNode.label" @input="markDirty" />
+                  </label>
+                  <label class="field wide">
+                    <span>标题</span>
+                    <el-input v-model="selectedNode.title" type="textarea" :rows="2" @input="markDirty" />
+                  </label>
+                  <label class="field">
+                    <span>类型</span>
+                    <el-input :model-value="selectedNode.kind || 'unknown'" disabled />
+                  </label>
+                  <label class="field">
+                    <span>页码</span>
+                    <el-input :model-value="formatPage(selectedNode.page_no)" disabled />
+                  </label>
+                  <label class="field wide">
+                    <span>source_ref</span>
+                    <el-input :model-value="selectedNode.source_ref || '无'" disabled />
+                  </label>
+                </div>
+              </section>
+
+              <section class="panel-section">
+                <div class="section-head">
+                  <h3>正文内容</h3>
+                  <el-button size="small" @click="addParagraph">
+                    <el-icon><Plus /></el-icon>
+                    添加段落
+                  </el-button>
+                </div>
+
+                <div v-if="selectedContent.length" class="paragraph-list">
+                  <div v-for="(item, index) in selectedContent" :key="index" class="paragraph-row">
+                    <label class="field">
+                      <span>段落 {{ index + 1 }}</span>
+                      <el-input
+                        v-model="item.text"
+                        type="textarea"
+                        :rows="4"
+                        @input="markDirty"
+                      />
+                    </label>
+                    <el-button type="danger" plain @click="removeParagraph(index)">删除</el-button>
+                  </div>
+                </div>
+                <el-empty v-else description="暂无直属正文段落" />
+              </section>
+
+              <section class="panel-section">
+                <h3>解析告警</h3>
+                <div v-if="selectedWarnings.length" class="warning-list">
+                  <el-alert
+                    v-for="(warning, index) in selectedWarnings"
+                    :key="index"
+                    :title="formatWarning(warning)"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                  />
+                </div>
+                <el-empty v-else description="当前节点无告警" />
+              </section>
+            </template>
+          </el-scrollbar>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -505,9 +507,19 @@ function formatPage(pageNo) {
 </script>
 
 <style scoped>
+.structure-editor-shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
 .page {
   flex: 1;
-  height: calc(100vh - 68px);
+  height: auto;
   min-height: 0;
   padding: 20px 28px 28px;
   overflow: hidden;
@@ -539,6 +551,7 @@ function formatPage(pageNo) {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(440px, 1.1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
 }
@@ -576,10 +589,19 @@ function formatPage(pageNo) {
 .tree-scroll,
 .detail-scroll {
   flex: 1;
-  height: 100%;
   min-height: 0;
+  height: auto;
+  overflow: hidden;
 }
-.tree-scroll {
+.tree-scroll :deep(.el-scrollbar__wrap),
+.detail-scroll :deep(.el-scrollbar__wrap) {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.tree-scroll :deep(.el-scrollbar__view) {
   padding: 10px;
 }
 .tree-node {
@@ -617,7 +639,7 @@ function formatPage(pageNo) {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-.detail-scroll {
+.detail-scroll :deep(.el-scrollbar__view) {
   padding: 20px;
 }
 .panel-section {
@@ -690,16 +712,9 @@ function formatPage(pageNo) {
 }
 
 @media (max-width: 1100px) {
-  .page {
-    overflow: auto;
-  }
   .editor-grid {
     grid-template-columns: 1fr;
-    overflow: visible;
-  }
-  .tree-pane,
-  .detail-pane {
-    min-height: 420px;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
