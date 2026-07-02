@@ -17,6 +17,11 @@ from src.config import Settings
 SUPPORTED_EXTENSIONS = {".docx", ".pdf"}
 PARSED_JSON_FILENAME = "document.json"
 CONVERTED_PDF_FILENAME = "document.pdf"
+CLEANED_DOCX_FILENAME = "document.no-header-footer.docx"
+LIBREOFFICE_PDF_EXPORT_OPTIONS = {
+    "ExportBookmarks": {"type": "boolean", "value": "false"},
+    "InitialView": {"type": "long", "value": "0"},
+}
 _LOGGER = logging.getLogger(__name__)
 _TORCHVISION_NMS_LIB: Any | None = None
 _DOCUMENT_CONVERTER: Any | None = None
@@ -25,7 +30,7 @@ _DOCUMENT_CONVERTER_WARMUP_STARTED = False
 
 ERROR_MESSAGES = {
     "UNSUPPORTED_PARSE_TYPE": "仅支持 .docx、.pdf 文件解析",
-    "UNSUPPORTED_DOCX_PARSER_ENGINE": "DOCX_PARSER_ENGINE 仅支持 docling 或 python-docx",
+    "UNSUPPORTED_DOCX_PARSER_ENGINE": "DOCX_PARSER_ENGINE 仅支持 docling、python-docx 或 pymupdf4llm",
     "UNSUPPORTED_PDF_PARSER_ENGINE": "PDF_PARSER_ENGINE 仅支持 docling 或 pymupdf4llm",
     "DOCUMENT_CONVERSION_ERROR": "Word 文件转换 PDF 失败，请检查 LibreOffice 环境",
     "DOCUMENT_PARSING_ERROR": "文档解析失败，请确认文件为纯文字版 PDF 或 DOCX",
@@ -75,7 +80,12 @@ def parse_uploaded_document(
     )
     pdf_path = (
         parsing_dir / CONVERTED_PDF_FILENAME
-        if extension == ".docx" and docx_parser_engine == "docling"
+        if extension == ".docx" and docx_parser_engine in {"docling", "pymupdf4llm"}
+        else None
+    )
+    cleaned_docx_path = (
+        parsing_dir / CLEANED_DOCX_FILENAME
+        if extension == ".docx" and docx_parser_engine in {"docling", "pymupdf4llm"}
         else None
     )
 
@@ -90,13 +100,24 @@ def parse_uploaded_document(
         else:
             if pdf_path is not None:
                 try:
-                    conversion_input_path = convert_docx_to_pdf(source_path, pdf_path)
+                    if cleaned_docx_path is None:
+                        raise RuntimeError("cleaned DOCX path was not initialized")
+                    conversion_input_path = remove_docx_headers_footers(
+                        source_path,
+                        cleaned_docx_path,
+                    )
+                    conversion_input_path = convert_docx_to_pdf(conversion_input_path, pdf_path)
                 except Exception as exc:
                     raise ParsingError("DOCUMENT_CONVERSION_ERROR", status_code=500) from exc
 
             try:
                 if extension == ".pdf" and pdf_parser_engine == "pymupdf4llm":
                     json_data = convert_pdf_to_pymupdf4llm_json_data(source_path, file_id)
+                elif extension == ".docx" and docx_parser_engine == "pymupdf4llm":
+                    json_data = convert_pdf_to_pymupdf4llm_json_data(
+                        conversion_input_path,
+                        file_id,
+                    )
                 else:
                     json_data = convert_to_json_data(conversion_input_path)
                     if extension == ".pdf":
@@ -244,7 +265,7 @@ def convert_docx_to_pdf(input_path: Path, output_path: Path) -> Path:
             f"-env:UserInstallation={profile_dir.as_uri()}",
             "--headless",
             "--convert-to",
-            "pdf",
+            libreoffice_pdf_export_filter(),
             "--outdir",
             str(out_dir),
             str(input_path),
@@ -261,6 +282,44 @@ def convert_docx_to_pdf(input_path: Path, output_path: Path) -> Path:
         shutil.move(str(generated_pdf), output_path)
 
     return output_path
+
+
+def libreoffice_pdf_export_filter() -> str:
+    options = json.dumps(LIBREOFFICE_PDF_EXPORT_OPTIONS, separators=(",", ":"))
+    return f"pdf:writer_pdf_Export:{options}"
+
+
+def remove_docx_headers_footers(input_path: Path, output_path: Path) -> Path:
+    from docx import Document
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    document = Document(input_path)
+
+    for section in document.sections:
+        parts = [
+            section.header,
+            section.first_page_header,
+            section.even_page_header,
+            section.footer,
+            section.first_page_footer,
+            section.even_page_footer,
+        ]
+
+        for part in parts:
+            part.is_linked_to_previous = False
+            clear_docx_story_part(part)
+
+    document.save(output_path)
+    return output_path
+
+
+def clear_docx_story_part(story_part: Any) -> None:
+    element = story_part._element
+
+    for child in list(element):
+        element.remove(child)
+
+    story_part.add_paragraph()
 
 
 def convert_to_json_data(input_path: Path) -> dict[str, Any]:
@@ -297,7 +356,7 @@ def add_docling_pdf_contract_structure(
 
 def normalize_docx_parser_engine(value: str) -> str:
     normalized = value.strip().lower().replace("_", "-")
-    if normalized not in {"docling", "python-docx"}:
+    if normalized not in {"docling", "python-docx", "pymupdf4llm"}:
         raise ParsingError("UNSUPPORTED_DOCX_PARSER_ENGINE", status_code=500)
     return normalized
 

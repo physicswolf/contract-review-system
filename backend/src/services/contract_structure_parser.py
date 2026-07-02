@@ -440,6 +440,9 @@ def append_content(node: ClauseNode, line: StandardLine, text: str) -> None:
         "line_index": line.line_index,
         "text": text,
     }
+    bbox = standard_line_bbox_payload(line)
+    if bbox is not None:
+        content["bbox"] = bbox
 
     if node.kind == "attachment" and not node.title:
         node.title = text
@@ -593,13 +596,32 @@ def is_table_line(line: StandardLine) -> bool:
 
 
 def line_to_table_payload(line: StandardLine) -> dict[str, Any]:
-    return {
+    payload = {
         "source_ref": line.source_ref,
         "page_no": line.page_no,
         "line_index": line.line_index,
         "text": line.text,
         "source": line.source,
     }
+    bbox = standard_line_bbox_payload(line)
+    if bbox is not None:
+        payload["bbox"] = bbox
+    return payload
+
+
+def standard_line_bbox_payload(line: StandardLine) -> dict[str, Any] | None:
+    if line.bbox is None:
+        return None
+    payload: dict[str, Any] = {
+        "l": line.bbox[0],
+        "t": line.bbox[1],
+        "r": line.bbox[2],
+        "b": line.bbox[3],
+    }
+    coord_origin = line.extra.get("bbox_coord_origin")
+    if isinstance(coord_origin, str) and coord_origin:
+        payload["coord_origin"] = coord_origin
+    return payload
 
 
 def is_attachment_list_line(

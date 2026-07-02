@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -20,6 +22,7 @@ from src.services.file_storage import StoredUpload, delete_stored_upload
 
 SHANGHAI_TZ = timezone(timedelta(hours=8))
 TaskStatus = Literal["queued", "running", "succeeded", "failed"]
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -120,6 +123,7 @@ class DocumentTaskManager:
                 stored_upload.metadata.extension,
                 settings,
             )
+            self._build_blocks_artifact(stored_upload, parsing_artifacts, settings)
             self._update(
                 task_id,
                 status="succeeded",
@@ -143,6 +147,29 @@ class DocumentTaskManager:
     def _get_stored_upload(self, task_id: str) -> StoredUpload:
         with self._lock:
             return self._tasks[task_id].stored_upload
+
+    def _build_blocks_artifact(
+        self,
+        stored_upload: StoredUpload,
+        parsing_artifacts: ParsingArtifacts,
+        settings: Settings,
+    ) -> None:
+        try:
+            from src.services.block_builder import BLOCKS_JSON_FILENAME, build_blocks_json
+
+            blocks_data = build_blocks_json(
+                stored_upload.metadata.id,
+                stored_upload.path,
+                stored_upload.metadata.extension,
+                settings,
+            )
+            blocks_path = parsing_artifacts.directory / BLOCKS_JSON_FILENAME
+            _write_json_atomically(blocks_path, blocks_data)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to build blocks.json for file_id=%s",
+                stored_upload.metadata.id,
+            )
 
     def _update(
         self,
@@ -170,6 +197,15 @@ class DocumentTaskManager:
             state.stage = "failed"
             state.updated_at = datetime.now(SHANGHAI_TZ)
             state.error = TaskError(code=code, message=message)
+
+
+def _write_json_atomically(path: Path, data: dict) -> None:
+    temp_path = path.with_suffix(path.suffix + ".part")
+    temp_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temp_path.replace(path)
 
 
 document_task_manager = DocumentTaskManager()
