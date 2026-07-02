@@ -67,6 +67,8 @@ def _build_docx_blocks(source_path: Path, document: dict[str, Any]) -> dict[str,
                 "no": line.no,
                 "page": page,
                 "text": line.text,
+                "kind": line.token.kind if line.token else None,
+                "rank": line.token.rank if line.token else None,
                 "bbox": bbox,
             }
         )
@@ -78,11 +80,14 @@ def _build_pdf_blocks(document: dict[str, Any]) -> dict[str, Any]:
     total_pages, units = _load_document_units(document)
     blocks = []
     for no, unit in enumerate(units, 1):
+        token = parse_number_token(unit.text)
         blocks.append(
             {
                 "no": no,
                 "page": unit.page,
                 "text": unit.text,
+                "kind": token.kind if token else None,
+                "rank": token.rank if token else None,
                 "bbox": _bbox_to_block_bbox(unit.bbox),
             }
         )

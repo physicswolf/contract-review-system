@@ -569,3 +569,123 @@
   - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
   - `git diff --check` 通过
 - **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 16:43:18 CST — 左右栏独立滚动修正
+
+- **依据**：用户反馈文档结构编辑页和审核结果页仍未实现左右栏独立滚动
+- **问题定位**：此前只约束内容区 `calc(100vh - 68px)`，缺少完整页面固定高度 shell；结构编辑页还残留了一段重复模板内容
+- **实现动作**：
+  - 修复 `frontend/src/views/contract/StructureEditor.vue` 重复模板残留，新增 `structure-editor-shell`，将页面高度固定为 `100vh`，左右栏 `el-scrollbar` 作为 flex 剩余高度区域滚动
+  - 更新 `frontend/src/views/contract/AuditResult.vue`，新增 `audit-result-shell`，让结果页主体占满 Topbar 下方剩余高度，左侧原文 `.doc` 与右侧结果 `.cards` 独立滚动
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 17:21:44 CST — 合同类型编辑页滚动条审查修复
+
+- **依据**：读取 `docs/review/2026-07-02-滚动条修复审查意见.md`，按审查意见修复 `ContractTypeEdit.vue` 左右栏无法独立滚动的问题
+- **实现动作**：更新 `frontend/src/views/config/ContractTypeEdit.vue`，新增固定高度页面 shell；将外层 `.page` 改为隐藏整体滚动；为 `.type-shell` 设置固定视口高度；为左右栏补齐 `min-height: 0`；左侧列表和右侧编辑区分别独立滚动，左侧新建按钮保持在列表滚动区之外
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 17:28:24 CST — 审核结果页滚动容器一致化
+
+- **依据**：用户确认 `/api/contracts/1/result` 对接 `AuditResult.vue` 后，要求对该页面做和合同类型编辑页相同的滚动容器改动
+- **实现动作**：更新 `frontend/src/views/contract/AuditResult.vue`，在固定高度 shell 下新增 `audit-result-page` 外层容器，统一由页面层接管 padding 和整体 `overflow: hidden`；内部左右两栏继续分别由 `.doc` 和 `.cards` 独立滚动
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 17:41:41 CST — 审核结果页按改动示意图显示滚动条
+
+- **依据**：查看 `docs/改动示意.png`，确认截图对应 `frontend/src/views/contract/AuditResult.vue`；红字要求左侧原文区域显示滚动条，右侧顶部审核结果标题、维度 Tab、风险筛选区不显示滚动条，右侧下方风险列表区域显示滚动条
+- **实现动作**：更新 `frontend/src/views/contract/AuditResult.vue`，将左侧 `.doc` 与右侧 `.cards` 改为 `overflow-y: scroll` 并保留稳定滚动槽；只在这两个内容区绘制滚动条，不给右侧顶部固定区域添加滚动条
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 17:47:28 CST — 去除页面滚动条并启用左右分区滚动
+
+- **依据**：用户反馈审核结果页最右侧页面滚动条仍存在，鼠标滚轮只触发页面滚动，左右分区滚动条不生效；同时要求去除“全部｜基础核查”维度 Tab 区域滚动条
+- **实现动作**：
+  - 更新 `frontend/src/layouts/MainLayout.vue`，将主应用布局固定为 `height: 100vh` 并隐藏外层滚动，补齐 `.app-body` 的 `min-height: 0` 和 `overflow: hidden`
+  - 更新 `frontend/src/views/contract/AuditResult.vue`，左右滚动区增加 `overscroll-behavior: contain`，确保滚轮优先在 `.doc` 和 `.cards` 内滚动；将 `.dim-tabs` 改为 `overflow: hidden`，取消维度 Tab 行滚动条
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 17:52:06 CST — 结构编辑页去除页面滚动并启用左右分区滚动
+
+- **依据**：用户要求结构编辑页面也按审核结果页同样方式处理滚动
+- **实现动作**：更新 `frontend/src/views/contract/StructureEditor.vue`，左右 `el-scrollbar` 改为常显滚动条；内部 `.el-scrollbar__wrap` 固定为纵向滚动区并阻止滚轮继续冒泡；删除窄屏下 `.page` 回退到页面滚动的规则，改为左右栏上下分区各自滚动
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 18:22:02 CST — blocks rank 与审核原文渲染开发
+
+- **依据**：读取最新 `docs/planning/blocks_rank与原文渲染计划书.md` 与 `docs/develop/blocks_rank与原文渲染设计说明书.md`
+- **实现动作**：
+  - 更新 `backend/src/services/block_builder.py`，DOCX 与 PDF blocks 生成时写入 `kind` 和 `rank`
+  - 更新 `backend/src/api/contracts.py`，审核结果原文优先读取 `blocks.json`，按 `rank` 输出 `h2`/`h3`/`p`/`highlight`；缺少 blocks 时保留原 `contract_structure` 回退逻辑
+  - 更新 `backend/tests/test_block_builder.py` 与 `backend/tests/test_contracts_api.py`，覆盖 blocks rank 输出和原文渲染映射
+- **验证**：
+  - `python3 -m py_compile backend/src/services/block_builder.py backend/src/api/contracts.py backend/tests/test_block_builder.py backend/tests/test_contracts_api.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_block_builder.py tests/test_contracts_api.py` 通过，`9 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`69 passed`
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `backend/.pytest_cache` 和项目源码/测试目录下的 `__pycache__`
+
+---
+
+## 2026-07-02 18:55:36 CST — 批量创建用户准备
+
+- **依据**：用户要求读取 `backend/.env` 数据库连接信息，连接 `aizhiqi` 库，在 `user` 表中创建 7 个公司账号，密码统一为 `12345678`，权限与 `yilu@company.com` 相同
+- **执行动作**：读取 `backend/.env`、`backend/src/services/auth_service.py`、`backend/src/db/migrations/001_create_auth_tables.sql`，确认用户表字段、bcrypt 密码生成方式和可复制的权限字段；注意 `.env` 当前 `MYSQL_DATABASE` 为 `aizhiqi_dev`，本次按用户明确要求覆盖连接到 `aizhiqi`
+- **中间结果**：首次数据库写入命令未执行成功，原因是 shell 对 SQL 反引号/引号解析导致命令在进入 Python 前失败；未产生数据库写入
+
+---
+
+## 2026-07-02 19:01:30 CST — 批量创建用户完成
+
+- **执行动作**：使用 `backend/.env` 中的 MySQL 主机、端口、用户和密码，并通过环境变量覆盖 `MYSQL_DATABASE=aizhiqi`，读取 `yilu@company.com` 的 `company`、`role`、`phone`、`status` 后批量插入用户；每个账号使用 `auth_service.hash_password()` 生成 `12345678` 的 bcrypt 哈希
+- **执行结果**：已插入 `yangtingting@company.com`、`wuxingyu@company.com`、`qinqiong@company.com`、`huoda@company.com`、`chengyupeng@company.com`、`dushu@company.com`、`jianxiaodong@company.com`
+- **验证**：确认连接库为 `aizhiqi`；7 个账号 `verify_password('12345678')` 均为 `True`；角色均为 `企业管理员`，状态均为 `1`
+
+---
+
+## 2026-07-02 18:37:34 CST — 结构编辑展示改为优先使用 blocks.json
+
+- **依据**：用户要求“将文档结构编辑的结构展示也改为基于 blocks.json”
+- **实现动作**：
+  - 更新 `backend/src/services/structure_editor.py`，新增 `blocks.json` 读取与结构树构建逻辑，将 blocks 转为 `StandardLine` 后复用现有章节结构解析器生成编辑页结构；缺少 blocks 时保留 `document.json` 的 `contract_structure` 回退
+  - 保存结构时写入 `contract_structure_editor` 手工编辑标记，避免用户保存后的结构在下一次打开时又被原始 `blocks.json` 覆盖
+  - 更新 `backend/src/api/documents.py`，`GET /api/documents/{file_id}` 与 `GET /api/documents/{file_id}/structure` 都通过新的编辑结构加载逻辑计算章节数和返回结构
+  - 更新 `backend/tests/test_documents_api.py`，新增 blocks 优先级测试，覆盖 `source_ref=#/blocks/N`、bbox 转换、正文挂载和保存后重新加载手工编辑结构
+- **验证**：
+  - `python3 -m py_compile backend/src/services/structure_editor.py backend/src/api/documents.py backend/tests/test_documents_api.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_documents_api.py` 通过，`5 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`70 passed`
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `backend/.pytest_cache` 和项目源码/测试目录下的 `__pycache__`

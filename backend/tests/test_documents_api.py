@@ -57,6 +57,99 @@ async def test_document_info_and_structure_endpoints(
 
 
 @pytest.mark.anyio
+async def test_structure_endpoint_prefers_blocks_json(
+    isolated_parsing_dir: Path,
+    auth_headers: dict[str, str],
+) -> None:
+    file_id = "doc-blocks"
+    document = sample_document(file_id)
+    document["contract_structure"]["children"][0]["title"] = "旧结构标题"
+    write_document(isolated_parsing_dir, file_id, document)
+    write_blocks(
+        isolated_parsing_dir,
+        file_id,
+        {
+            "total_pages": 2,
+            "blocks": [
+                {
+                    "no": 1,
+                    "page": 2,
+                    "text": "第一章 Blocks总则",
+                    "kind": "chapter",
+                    "rank": 0,
+                    "bbox": {"x": 10, "y": 20, "width": 100, "height": 12},
+                },
+                {
+                    "no": 2,
+                    "page": 2,
+                    "text": "第一条 Blocks标的",
+                    "kind": "article",
+                    "rank": 10,
+                    "bbox": {"x": 12, "y": 48, "width": 120, "height": 14},
+                },
+                {
+                    "no": 3,
+                    "page": 2,
+                    "text": "验收后付款。",
+                    "kind": None,
+                    "rank": None,
+                    "bbox": {"x": 16, "y": 76, "width": 160, "height": 16},
+                },
+            ],
+        },
+    )
+
+    async with make_client() as client:
+        info_response = await client.get(f"/api/documents/{file_id}", headers=auth_headers)
+        structure_response = await client.get(
+            f"/api/documents/{file_id}/structure",
+            headers=auth_headers,
+        )
+
+    assert info_response.status_code == 200
+    assert info_response.json()["document"]["chapter_count"] == 1
+    assert info_response.json()["document"]["warning_count"] == 0
+    assert structure_response.status_code == 200
+
+    structure = structure_response.json()["structure"]
+    chapter = structure["children"][0]
+    article = chapter["children"][0]
+    assert chapter["title"] == "Blocks总则"
+    assert chapter["source_ref"] == "#/blocks/0"
+    assert chapter["bbox"] == [10.0, 20.0, 110.0, 32.0]
+    assert article["title"] == "Blocks标的"
+    assert article["source_ref"] == "#/blocks/1"
+    assert article["content"][0] == {
+        "source_ref": "#/blocks/2",
+        "page_no": 2,
+        "line_index": 3,
+        "text": "验收后付款。",
+        "bbox": {"l": 16.0, "t": 76.0, "r": 176.0, "b": 92.0},
+    }
+
+    edited_structure = copy.deepcopy(structure)
+    edited_structure["children"][0]["title"] = "手工修订总则"
+
+    async with make_client() as client:
+        save_response = await client.put(
+            f"/api/documents/{file_id}/structure",
+            json={"structure": edited_structure},
+            headers=auth_headers,
+        )
+        reloaded_response = await client.get(
+            f"/api/documents/{file_id}/structure",
+            headers=auth_headers,
+        )
+
+    assert save_response.status_code == 200
+    assert reloaded_response.status_code == 200
+    assert reloaded_response.json()["structure"]["children"][0]["title"] == "手工修订总则"
+    assert read_document(isolated_parsing_dir, file_id)["contract_structure_editor"] == {
+        "source": "manual"
+    }
+
+
+@pytest.mark.anyio
 async def test_update_structure_preserves_other_document_fields(
     isolated_parsing_dir: Path,
     auth_headers: dict[str, str],
@@ -122,6 +215,15 @@ def write_document(parsing_dir: Path, file_id: str, document: dict[str, Any]) ->
     document_dir.mkdir(parents=True, exist_ok=True)
     (document_dir / "document.json").write_text(
         json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_blocks(parsing_dir: Path, file_id: str, blocks: dict[str, Any]) -> None:
+    document_dir = parsing_dir / file_id
+    document_dir.mkdir(parents=True, exist_ok=True)
+    (document_dir / "blocks.json").write_text(
+        json.dumps(blocks, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 

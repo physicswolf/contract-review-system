@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from src.api import contracts as contracts_api
 from src.config import get_settings
 from src.main import app
 from src.services.contract_store import ContractRepository
@@ -226,6 +227,65 @@ async def test_start_audit_from_upload_requires_parsed_document(
     assert response.status_code == 404
     assert response.json() == {"detail": "文档不存在或尚未解析完成"}
     assert contract_repo.count() == 0
+
+
+def test_original_text_uses_blocks_rank_for_rendering(
+    isolated_contract_state: dict[str, Path],
+) -> None:
+    file_id = "file-blocks"
+    parsing_dir = isolated_contract_state["parsing"] / file_id
+    parsing_dir.mkdir(parents=True)
+    (parsing_dir / "blocks.json").write_text(
+        json.dumps(
+            {
+                "total_pages": 1,
+                "blocks": [
+                    {
+                        "no": 1,
+                        "page": 1,
+                        "text": "第一章 协议总则",
+                        "kind": "chapter",
+                        "rank": 0,
+                    },
+                    {
+                        "no": 2,
+                        "page": 1,
+                        "text": "第一条 合同标的",
+                        "kind": "article",
+                        "rank": 10,
+                    },
+                    {
+                        "no": 3,
+                        "page": 1,
+                        "text": "付款期限为验收后九十日内",
+                        "kind": None,
+                        "rank": None,
+                    },
+                    {
+                        "no": 4,
+                        "page": 1,
+                        "text": "1.1 子条款内容",
+                        "kind": "dotted",
+                        "rank": 21,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    blocks = contracts_api._original_text_for_contract(
+        {"file_id": file_id, "contract_name": "测试合同"},
+        ["付款期限"],
+    )
+
+    assert blocks == [
+        {"type": "h2", "text": "第一章 协议总则"},
+        {"type": "h3", "text": "第一条 合同标的"},
+        {"type": "highlight", "text": "付款期限为验收后九十日内"},
+        {"type": "p", "text": "1.1 子条款内容"},
+    ]
 
 
 @pytest.mark.anyio

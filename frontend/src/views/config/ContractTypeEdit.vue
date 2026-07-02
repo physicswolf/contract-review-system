@@ -1,75 +1,77 @@
 <template>
-  <AppTopbar title="配置中心 · 合同类型编辑">
-    <template #actions>
-      <el-button @click="backToTypes">返回合同类型管理</el-button>
-    </template>
-  </AppTopbar>
+  <div class="contract-type-editor-shell">
+    <AppTopbar title="配置中心 · 合同类型编辑">
+      <template #actions>
+        <el-button @click="backToTypes">返回合同类型管理</el-button>
+      </template>
+    </AppTopbar>
 
-  <div class="page">
-    <div class="type-shell">
-      <aside class="type-aside">
-        <div class="type-aside-title">合同类型 · 立场</div>
-        <div class="type-list" v-loading="loadingTypes">
-          <button
-            v-for="item in types"
-            :key="item.id"
-            class="type-item"
-            :class="{ on: !isNew && String(item.id) === currentTypeId }"
-            @click="openType(item)"
-          >
-            <b>
-              <span class="dot" :style="{ background: item.status === '已启用' ? '#20b879' : '#cbd3df' }"></span>
-              {{ item.name }}
-            </b>
-            <span>{{ item.stance }} · {{ item.relatedPoints }} 个审查点</span>
-          </button>
-        </div>
-        <div class="type-add">
-          <el-button style="width: 100%" :type="isNew ? 'primary' : 'default'" @click="newType">＋ 新建</el-button>
-        </div>
-      </aside>
+    <div class="page">
+      <div class="type-shell">
+        <aside class="type-aside">
+          <div class="type-aside-title">合同类型 · 立场</div>
+          <div class="type-list" v-loading="loadingTypes">
+            <button
+              v-for="item in types"
+              :key="item.id"
+              class="type-item"
+              :class="{ on: !isNew && String(item.id) === currentTypeId }"
+              @click="openType(item)"
+            >
+              <b>
+                <span class="dot" :style="{ background: item.status === '已启用' ? '#20b879' : '#cbd3df' }"></span>
+                {{ item.name }}
+              </b>
+              <span>{{ item.stance }} · {{ item.relatedPoints }} 个审查点</span>
+            </button>
+          </div>
+          <div class="type-add">
+            <el-button style="width: 100%" :type="isNew ? 'primary' : 'default'" @click="newType">＋ 新建</el-button>
+          </div>
+        </aside>
 
-      <main class="type-main">
-        <div class="page-head">
-          <h1>{{ isNew ? '新建合同类型' : '编辑合同类型' }}</h1>
-          <p>定义合同类型、审核立场及合同关键信息识别范围</p>
-        </div>
+        <main class="type-main">
+          <div class="page-head">
+            <h1>{{ isNew ? '新建合同类型' : '编辑合同类型' }}</h1>
+            <p>定义合同类型、审核立场及合同关键信息识别范围</p>
+          </div>
 
-        <section class="card" v-loading="loading">
-          <div class="dlg-grid">
-            <div class="field">
-              <label>合同类型 <span class="req">*</span></label>
-              <el-input v-model="form.name" placeholder="请输入合同类型名称" />
+          <section class="card" v-loading="loading">
+            <div class="dlg-grid">
+              <div class="field">
+                <label>合同类型 <span class="req">*</span></label>
+                <el-input v-model="form.name" placeholder="请输入合同类型名称" />
+              </div>
+              <div class="field">
+                <label>合同立场 <span class="req">*</span></label>
+                <el-select v-model="form.stance" class="full">
+                  <el-option label="甲方立场" value="甲方立场" />
+                  <el-option label="乙方立场" value="乙方立场" />
+                </el-select>
+              </div>
+              <div class="field wide">
+                <label>合同描述</label>
+                <el-input v-model="form.desc" type="textarea" :rows="3" placeholder="请输入该合同类型的定义、适用范围及主要业务特征" />
+              </div>
+              <div class="field wide">
+                <label>识别关键词</label>
+                <el-input v-model="form.keywords" placeholder="多个关键词用逗号分隔，如：采购,供货,设备" />
+                <div class="field-hint">大模型依据关键词和合同描述进行自动识别</div>
+              </div>
             </div>
-            <div class="field">
-              <label>合同立场 <span class="req">*</span></label>
-              <el-select v-model="form.stance" class="full">
-                <el-option label="甲方立场" value="甲方立场" />
-                <el-option label="乙方立场" value="乙方立场" />
-              </el-select>
+          </section>
+
+          <div class="actions">
+            <div class="actions-left">
+              <el-button v-if="!isNew" type="danger" plain @click="deleteType">删除该合同类型</el-button>
             </div>
-            <div class="field wide">
-              <label>合同描述</label>
-              <el-input v-model="form.desc" type="textarea" :rows="3" placeholder="请输入该合同类型的定义、适用范围及主要业务特征" />
-            </div>
-            <div class="field wide">
-              <label>识别关键词</label>
-              <el-input v-model="form.keywords" placeholder="多个关键词用逗号分隔，如：采购,供货,设备" />
-              <div class="field-hint">大模型依据关键词和合同描述进行自动识别</div>
+            <div class="actions-right">
+              <el-button @click="backToTypes">取消</el-button>
+              <el-button type="primary" :loading="saving" @click="save">保存</el-button>
             </div>
           </div>
-        </section>
-
-        <div class="actions">
-          <div class="actions-left">
-            <el-button v-if="!isNew" type="danger" plain @click="deleteType">删除该合同类型</el-button>
-          </div>
-          <div class="actions-right">
-            <el-button @click="backToTypes">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-          </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   </div>
 </template>
@@ -191,15 +193,27 @@ function backToTypes() {
 </script>
 
 <style scoped>
+.contract-type-editor-shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
 .page {
   flex: 1;
+  min-height: 0;
   padding: 20px 28px 30px;
-  overflow: auto;
+  overflow: hidden;
 }
 .type-shell {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
-  min-height: 600px;
+  height: calc(100vh - 180px);
+  min-height: 0;
   background: #fff;
   border: 0.667px solid var(--line);
   border-radius: 8px;
@@ -209,10 +223,13 @@ function backToTypes() {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: #fbfcff;
   border-right: 0.667px solid #e0e6ef;
+  overflow: hidden;
 }
 .type-aside-title {
+  flex-shrink: 0;
   padding: 16px 18px;
   font-size: 13.5px;
   font-weight: 700;
@@ -220,6 +237,7 @@ function backToTypes() {
 }
 .type-list {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -263,13 +281,16 @@ function backToTypes() {
   border-radius: 50%;
 }
 .type-add {
+  flex-shrink: 0;
   margin: 12px;
   padding-top: 12px;
   border-top: 0.667px solid #e7ecf4;
 }
 .type-main {
   min-width: 0;
+  min-height: 0;
   padding: 26px 30px 30px;
+  overflow-y: auto;
 }
 .page-head h1 {
   margin: 0;

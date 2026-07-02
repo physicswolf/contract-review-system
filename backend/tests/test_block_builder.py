@@ -55,18 +55,24 @@ def test_build_pdf_blocks_from_document_units(tmp_path: Path) -> None:
                 "no": 1,
                 "page": 1,
                 "text": "第一章 协议总则",
+                "kind": "chapter",
+                "rank": 0,
                 "bbox": {"x": 10, "y": 20, "width": 200, "height": 20},
             },
             {
                 "no": 2,
                 "page": 1,
                 "text": "本章正文",
+                "kind": None,
+                "rank": None,
                 "bbox": {"x": 10, "y": 50, "width": 170, "height": 20},
             },
             {
                 "no": 3,
                 "page": 2,
                 "text": "| 名称 | 内容 |",
+                "kind": None,
+                "rank": None,
                 "bbox": {"x": 20, "y": 30, "width": 200, "height": 50},
             },
         ],
@@ -117,12 +123,16 @@ def test_build_docx_blocks_matches_markdown_lines_to_document_units(tmp_path: Pa
         "no": 1,
         "page": 1,
         "text": "第一章 协议总则",
+        "kind": "chapter",
+        "rank": 0,
         "bbox": {"x": 10, "y": 20, "width": 200, "height": 50},
     }
     assert payload["blocks"][1] == {
         "no": 2,
         "page": 1,
         "text": "本章正文",
+        "kind": None,
+        "rank": None,
         "bbox": {"x": 10, "y": 50, "width": 170, "height": 20},
     }
 
