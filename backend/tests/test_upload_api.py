@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from io import BytesIO
-from zipfile import ZipFile
 
 import pytest
+from docx import Document
 from httpx import ASGITransport, AsyncClient
 
 from src.config import get_settings
@@ -37,8 +38,23 @@ def fake_document_parser(monkeypatch):
         if extension == ".docx":
             pdf_path = parsing_dir / "document.pdf"
             pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+        document = {
+            "texts": [
+                {
+                    "text": "合同",
+                    "prov": [
+                        {
+                            "page_no": 1,
+                            "line_index": 0,
+                            "bbox": {"l": 10, "t": 20, "r": 110, "b": 40},
+                        }
+                    ],
+                }
+            ],
+            "tables": [],
+        }
         (parsing_dir / "document.json").write_text(
-            '{"texts": ["合同"]}\n',
+            json.dumps(document, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         return ParsingArtifacts(
@@ -82,6 +98,7 @@ async def test_upload_valid_pdf(client, isolated_upload_dir, auth_headers):
     parsing_dir = isolated_upload_dir["parsing"] / file_payload["id"]
     assert task["document_json_path"] == str(parsing_dir / "document.json")
     assert (parsing_dir / "document.json").is_file()
+    assert read_blocks(parsing_dir)["blocks"][0]["text"] == "合同"
     assert not (parsing_dir / "document.pdf").exists()
 
 
@@ -150,6 +167,12 @@ async def test_upload_valid_docx(client, isolated_upload_dir, auth_headers):
     parsing_dir = isolated_upload_dir["parsing"] / file_payload["id"]
     assert (parsing_dir / "document.pdf").is_file()
     assert (parsing_dir / "document.json").is_file()
+    assert read_blocks(parsing_dir)["blocks"][0]["bbox"] == {
+        "x": 10,
+        "y": 20,
+        "width": 100,
+        "height": 20,
+    }
 
 
 @pytest.mark.anyio
@@ -226,23 +249,11 @@ def valid_pdf():
 
 def valid_docx():
     buffer = BytesIO()
-    with ZipFile(buffer, "w") as archive:
-        archive.writestr(
-            "[Content_Types].xml",
-            (
-                '<?xml version="1.0" encoding="UTF-8"?>'
-                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-                '<Default Extension="xml" ContentType="application/xml"/>'
-                "</Types>"
-            ),
-        )
-        archive.writestr(
-            "word/document.xml",
-            (
-                '<?xml version="1.0" encoding="UTF-8"?>'
-                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-                "<w:body><w:p><w:r><w:t>合同</w:t></w:r></w:p></w:body>"
-                "</w:document>"
-            ),
-        )
+    document = Document()
+    document.add_paragraph("合同")
+    document.save(buffer)
     return buffer.getvalue()
+
+
+def read_blocks(parsing_dir):
+    return json.loads((parsing_dir / "blocks.json").read_text(encoding="utf-8"))

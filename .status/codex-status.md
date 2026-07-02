@@ -529,3 +529,19 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_pdf_contract_parser.py` 通过，`8 passed`
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`66 passed`
   - `git diff --check` 通过
+
+---
+
+## 2026-07-02 13:45:52 CST — blocks.json 构建功能开发
+
+- **依据**：读取最新 `docs/planning/blocks构建计划书.md` 与 `docs/develop/blocks构建设计说明书.md`
+- **实现动作**：新增 `backend/src/services/block_builder.py`，提供 `build_blocks_json()`，从 `document.json` 的 `texts/tables` 提取带 bbox 的定位单元；PDF 直接生成 blocks，DOCX 先用 `python-docx` 提取段落/自动编号行，再与定位单元文本匹配生成 blocks
+- **管线集成**：更新 `backend/src/pipelines/document_tasks.py`，解析成功后写入 `storage/parsing/{file_id}/blocks.json`；生成失败只记录异常，不改变原解析任务成功状态
+- **测试动作**：新增 `backend/tests/test_block_builder.py` 覆盖 PDF blocks 直接生成与 DOCX 段落匹配；更新 `backend/tests/test_upload_api.py` 验证上传解析任务会落盘 `blocks.json`
+- **验证**：
+  - `python3 -m py_compile backend/src/services/block_builder.py backend/src/pipelines/document_tasks.py backend/tests/test_block_builder.py backend/tests/test_upload_api.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_block_builder.py tests/test_upload_api.py` 通过，`9 passed`
+  - `python3 -m compileall backend/src backend/tests` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`68 passed`
+  - `git diff --check` 通过
+- **清理**：删除本轮验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`
