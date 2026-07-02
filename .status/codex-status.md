@@ -545,3 +545,27 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`68 passed`
   - `git diff --check` 通过
 - **清理**：删除本轮验证产生的 `backend/.pytest_cache` 和源码/测试目录下的 `__pycache__`
+
+---
+
+## 2026-07-02 16:26:46 CST — 结构编辑页左右栏独立滚动
+
+- **依据**：用户要求文档结构编辑页面左右两栏分开滑动
+- **实现动作**：更新 `frontend/src/views/contract/StructureEditor.vue`，为结构编辑内容区设置 `height: calc(100vh - 68px)`，限制页面主体整体滚动；为左右栏 grid 增加 `overflow: hidden`，并让左右 `el-scrollbar` 占满各自面板剩余高度
+- **效果**：桌面双栏布局下，左侧章节树和右侧节点详情分别在各自面板内滚动，顶部操作栏和页面头部保持固定
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
+
+---
+
+## 2026-07-02 16:29:51 CST — 审核结果页左右栏独立滚动
+
+- **依据**：用户要求审核结果页面左右两栏分开滑动
+- **实现动作**：更新 `frontend/src/views/contract/AuditResult.vue`，为结果页主体设置 `height: calc(100vh - 68px)`；左侧原文 `.doc` 与右侧结果卡片 `.cards` 均设置为各自面板内的可滚动剩余区域
+- **效果**：桌面双栏布局下，左侧合同原文和右侧审查结果列表分别滚动，顶部操作栏、面板标题、维度 tab 和风险筛选按钮保持在各自固定位置
+- **验证**：
+  - `npm run build` 通过；仅出现既有 Vite/Rollup 依赖注释提示和 chunk 体积提示
+  - `git diff --check` 通过
+- **清理**：删除本次验证产生的 `frontend/dist`
