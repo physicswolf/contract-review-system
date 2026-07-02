@@ -514,3 +514,18 @@
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_document_parser.py` 通过，`13 passed`
   - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`65 passed`
   - `git diff --check` 通过
+
+---
+
+## 2026-07-02 10:55:04 CST — pymupdf4llm 解析结果增加 bbox
+
+- **依据**：用户要求使用 `pymupdf4llm` 的返回结果增加 bbox 信息
+- **实现动作**：更新 `backend/src/services/pdf_contract_parser.py`，读取 `page_chunks=True` 返回中的 `page_boxes[].bbox` 和 `page_boxes[].pos`，按 box 切分 Markdown 行并写入 `StandardLine.bbox`
+- **输出增强**：`texts[].prov[0].bbox`、`tables[].bbox`、`contract_structure` 节点 bbox、结构正文和表格条目均在存在定位信息时写入 bbox；坐标来源标记为 `coord_origin=TOPLEFT`
+- **行为处理**：继续忽略 `picture`、`formula`、`page-header`、`page-footer`；表格 box 保留为 `table`，用于输出表格 bbox
+- **测试动作**：更新 `backend/tests/test_pdf_contract_parser.py`，新增 pymupdf4llm page box bbox 保留测试，覆盖正文、结构节点、表格和页脚过滤
+- **验证**：
+  - `python3 -m py_compile backend/src/services/pdf_contract_parser.py backend/src/services/contract_structure_parser.py backend/tests/test_pdf_contract_parser.py` 通过
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_pdf_contract_parser.py` 通过，`8 passed`
+  - `env UV_CACHE_DIR=/tmp/uv-cache uv run pytest` 通过，`66 passed`
+  - `git diff --check` 通过

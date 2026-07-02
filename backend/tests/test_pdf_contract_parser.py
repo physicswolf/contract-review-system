@@ -228,3 +228,86 @@ def test_parse_pymupdf4llm_pdf_to_json_data_uses_markdown_chunks(tmp_path, monke
     assert payload["contract_structure"]["children"][0]["kind"] == "preamble"
     assert payload["contract_structure"]["children"][1]["label"] == "第一部分"
     assert payload["tables"][0]["text"] == "| 1 | 货物 |"
+
+
+def test_parse_pymupdf4llm_pdf_to_json_data_preserves_page_box_bbox(
+    tmp_path,
+    monkeypatch,
+):
+    pdf_path = tmp_path / "contract.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
+    parts = [
+        "# 第一部分 专用条款\n\n",
+        "一、工程概况\n\n",
+        "| 名称 | 内容 |\n| 1 | 货物 |\n\n",
+        "页脚\n",
+    ]
+    text = "".join(parts)
+    offsets = []
+    cursor = 0
+    for part in parts:
+        offsets.append((cursor, cursor + len(part)))
+        cursor += len(part)
+
+    fake_module = SimpleNamespace(
+        __version__="test-version",
+        to_markdown=lambda path, **kwargs: [
+            {
+                "metadata": {"page_number": 1},
+                "text": text,
+                "page_boxes": [
+                    {
+                        "index": 0,
+                        "class": "section-header",
+                        "bbox": (10, 20, 200, 40),
+                        "pos": offsets[0],
+                    },
+                    {
+                        "index": 1,
+                        "class": "text",
+                        "bbox": (10, 50, 220, 80),
+                        "pos": offsets[1],
+                    },
+                    {
+                        "index": 2,
+                        "class": "table",
+                        "bbox": (10, 90, 300, 130),
+                        "pos": offsets[2],
+                    },
+                    {
+                        "index": 3,
+                        "class": "page-footer",
+                        "bbox": (10, 760, 100, 780),
+                        "pos": offsets[3],
+                    },
+                ],
+            }
+        ],
+    )
+    monkeypatch.setitem(sys.modules, "pymupdf4llm", fake_module)
+
+    payload = parse_pymupdf4llm_pdf_to_json_data(pdf_path, doc_id="file-uuid")
+
+    first_text_bbox = payload["texts"][0]["prov"][0]["bbox"]
+    table_bbox = payload["tables"][0]["bbox"]
+    first_part = payload["contract_structure"]["children"][0]
+    first_child = first_part["children"][0]
+
+    assert first_text_bbox == {
+        "l": 10.0,
+        "t": 20.0,
+        "r": 200.0,
+        "b": 40.0,
+        "coord_origin": "TOPLEFT",
+    }
+    assert table_bbox == {
+        "l": 10.0,
+        "t": 90.0,
+        "r": 300.0,
+        "b": 130.0,
+        "coord_origin": "TOPLEFT",
+    }
+    assert first_part["bbox"] == [10.0, 20.0, 200.0, 40.0]
+    assert first_child["bbox"] == [10.0, 50.0, 220.0, 80.0]
+    assert first_child["tables"][0]["bbox"] == table_bbox
+    assert all(item["text"] != "页脚" for item in payload["texts"])

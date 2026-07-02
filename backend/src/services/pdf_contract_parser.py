@@ -17,6 +17,8 @@ from src.services.contract_structure_parser import (
 PYMUPDF4LLM_SCHEMA_NAME = "PyMuPDF4LLMContractDocument"
 DOCLING_PDF_STRUCTURE_SCHEMA_NAME = "DoclingPDFContractDocument"
 SCHEMA_VERSION = "1.0.0"
+PYMUPDF4LLM_SKIPPED_BOX_CLASSES = {"picture", "formula", "page-header", "page-footer"}
+PYMUPDF4LLM_BBOX_COORD_ORIGIN = "TOPLEFT"
 
 
 def parse_pymupdf4llm_pdf_to_json_data(
@@ -120,34 +122,95 @@ def standard_lines_from_pymupdf4llm_chunks(chunks: Any) -> list[StandardLine]:
             continue
 
         page_no = extract_pymupdf4llm_page_no(chunk, chunk_index)
-        text_parts = list(iter_pymupdf4llm_text_parts(chunk))
-        page_text = "\n".join(text_parts) if text_parts else str(chunk.get("text") or "")
+        lines.extend(standard_lines_from_pymupdf4llm_chunk(chunk, chunk_index, page_no))
+
+    return with_page_line_counts(lines)
+
+
+def standard_lines_from_pymupdf4llm_chunk(
+    chunk: dict[str, Any],
+    chunk_index: int,
+    page_no: int,
+) -> list[StandardLine]:
+    text = str(chunk.get("text") or "")
+    boxes = chunk.get("page_boxes")
+    if not isinstance(boxes, list):
+        return standard_lines_from_markdown(
+            text,
+            page_no=page_no,
+            source="pymupdf4llm",
+            source_ref_prefix=f"#/pages/{chunk_index}/lines",
+        )
+
+    lines: list[StandardLine] = []
+    for box_position, box in enumerate(boxes):
+        if not isinstance(box, dict):
+            continue
+        box_class = str(box.get("class") or "")
+        if box_class in PYMUPDF4LLM_SKIPPED_BOX_CLASSES:
+            continue
+        start, stop = extract_pymupdf4llm_text_range(box, len(text))
+        box_text = text[start:stop]
+        box_index = box.get("index")
+        if not isinstance(box_index, int):
+            box_index = box_position
         lines.extend(
             standard_lines_from_markdown(
-                page_text,
+                box_text,
                 page_no=page_no,
                 source="pymupdf4llm",
-                source_ref_prefix=f"#/pages/{chunk_index}/lines",
+                source_ref_prefix=f"#/pages/{chunk_index}/boxes/{box_index}/lines",
+                bbox=extract_pymupdf4llm_bbox(box),
+                default_block_type=pymupdf4llm_box_block_type(box_class),
+                extra={
+                    "box_index": box_index,
+                    "box_class": box_class,
+                    "bbox_coord_origin": PYMUPDF4LLM_BBOX_COORD_ORIGIN,
+                },
             )
         )
 
     return lines
 
 
-def iter_pymupdf4llm_text_parts(chunk: dict[str, Any]):
-    text = str(chunk.get("text") or "")
-    boxes = chunk.get("page_boxes")
-    if not isinstance(boxes, list):
-        yield text
-        return
+def extract_pymupdf4llm_text_range(box: dict[str, Any], text_length: int) -> tuple[int, int]:
+    pos = box.get("pos")
+    if not isinstance(pos, (list, tuple)) or len(pos) != 2:
+        return (0, text_length)
+    try:
+        start = max(0, min(text_length, int(pos[0])))
+        stop = max(start, min(text_length, int(pos[1])))
+    except (TypeError, ValueError):
+        return (0, text_length)
+    return (start, stop)
 
-    for box in boxes:
-        if not isinstance(box, dict):
-            continue
-        if box.get("class") in {"table", "picture", "page-header", "page-footer"}:
-            continue
-        start, stop = box.get("pos", (0, len(text)))
-        yield text[start:stop]
+
+def extract_pymupdf4llm_bbox(box: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    bbox = box.get("bbox")
+    if isinstance(bbox, dict):
+        try:
+            return (
+                float(bbox["l"]),
+                float(bbox["t"]),
+                float(bbox["r"]),
+                float(bbox["b"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return None
+    try:
+        return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+    except (TypeError, ValueError):
+        return None
+
+
+def pymupdf4llm_box_block_type(box_class: str) -> str:
+    if box_class == "table":
+        return "table"
+    if box_class in {"title", "section-header"}:
+        return "heading"
+    return "text"
 
 
 def extract_pymupdf4llm_page_no(chunk: dict[str, Any], fallback_index: int) -> int:
@@ -167,6 +230,9 @@ def standard_lines_from_markdown(
     page_no: int | None,
     source: str,
     source_ref_prefix: str = "#/lines",
+    bbox: tuple[float, float, float, float] | None = None,
+    default_block_type: str = "text",
+    extra: dict[str, Any] | None = None,
 ) -> list[StandardLine]:
     raw_lines = [line for line in markdown.splitlines()]
     cleaned_lines = [clean_contract_line(line) for line in raw_lines]
@@ -177,8 +243,10 @@ def standard_lines_from_markdown(
     for output_index, raw_index in enumerate(nonempty_indexes):
         raw = raw_lines[raw_index]
         text = cleaned_lines[raw_index]
-        block_type = "table" if is_markdown_table_line(raw) else "text"
-        if raw.strip().startswith("#"):
+        block_type = default_block_type
+        if block_type != "table" and is_markdown_table_line(raw):
+            block_type = "table"
+        if block_type != "table" and raw.strip().startswith("#"):
             block_type = "heading"
         lines.append(
             StandardLine(
@@ -189,6 +257,8 @@ def standard_lines_from_markdown(
                 line_count=line_count,
                 block_type=block_type,
                 source=source,
+                bbox=bbox,
+                extra=dict(extra or {}),
             )
         )
 
@@ -421,6 +491,9 @@ def build_text_items_from_standard_lines(lines: list[StandardLine]) -> list[dict
                 "block_type": line.block_type,
             },
         }
+        bbox = standard_line_bbox_payload(line)
+        if bbox is not None:
+            item["prov"][0]["bbox"] = bbox
         if token is not None:
             item["contract_numbering"] = {
                 "kind": token.kind,
@@ -439,13 +512,30 @@ def build_table_items_from_standard_lines(lines: list[StandardLine]) -> list[dic
     for line in lines:
         if line.block_type != "table":
             continue
-        tables.append(
-            {
-                "self_ref": f"#/tables/{len(tables)}",
-                "page_no": line.page_no,
-                "line_index": line.line_index,
-                "text": line.text,
-                "source": line.source,
-            }
-        )
+        item = {
+            "self_ref": f"#/tables/{len(tables)}",
+            "page_no": line.page_no,
+            "line_index": line.line_index,
+            "text": line.text,
+            "source": line.source,
+        }
+        bbox = standard_line_bbox_payload(line)
+        if bbox is not None:
+            item["bbox"] = bbox
+        tables.append(item)
     return tables
+
+
+def standard_line_bbox_payload(line: StandardLine) -> dict[str, Any] | None:
+    if line.bbox is None:
+        return None
+    payload: dict[str, Any] = {
+        "l": line.bbox[0],
+        "t": line.bbox[1],
+        "r": line.bbox[2],
+        "b": line.bbox[3],
+    }
+    coord_origin = line.extra.get("bbox_coord_origin")
+    if isinstance(coord_origin, str) and coord_origin:
+        payload["coord_origin"] = coord_origin
+    return payload
